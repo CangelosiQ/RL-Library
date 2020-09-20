@@ -46,7 +46,7 @@ def run(env, agent, brain_name, n_episodes=2000, length_episode=1000, eps_start=
                                                                                             np.mean(scores_window),
                                                                                             actions_counter,
                                                                                             score
-                                                                                            ), end="")
+                                                                                            )) #, end=""
         if i_episode % 100 == 0:
             print('\rEpisode {}\tAverage Score: {:.2f}'.format(i_episode, np.mean(scores_window)))
         if np.mean(scores_window) >= 13.0:
