@@ -1,6 +1,8 @@
+import copy
+
 import numpy as np
 import random
-from collections import namedtuple, deque
+from collections import namedtuple, deque, OrderedDict
 
 from rl_library.agents.models.model import QNetwork
 
@@ -15,14 +17,13 @@ GAMMA = 0.95  # discount factor
 TAU = 1e-3  # for soft update of target parameters
 LR = 5e-4  # learning rate
 UPDATE_EVERY = 4  # how often to update the network
-print(f"/////////////////// torch.cuda.is_available() = {torch.cuda.is_available()}")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class DQAgent():
     """Interacts with and learns from the environment."""
 
-    def __init__(self, state_size, action_size, hidden_layer_sizes=[256, 64], seed=42):
+    def __init__(self, state_size, action_size, model: nn.Module = None, hidden_layer_sizes: list = None, seed=42):
         """Initialize an Agent object.
         
         Params
@@ -37,21 +38,29 @@ class DQAgent():
         self.seed = random.seed(seed)
 
         # Q-Network
-        from collections import OrderedDict
-        architecture = OrderedDict([
-            ('fc1',  nn.Linear(state_size, 30)),
-            ('relu',  nn.ReLU()),
-            ('fc2',  nn.Linear(30, 30)),
-            ('relu',  nn.ReLU()),
-            ('output', nn.Linear(30, action_size)),
-            ('softmax', nn.Softmax(dim=1))])
-        self.qnetwork_local = nn.Sequential(architecture).to(device)
+        if model:
+            self.qnetwork_local = model.to(device)
+            self.qnetwork_target = copy.deepcopy(model).to(device)
+        elif hidden_layer_sizes:
+            layers_sizes = [state_size, ] + hidden_layer_sizes
+            layers = []
+            for i in range(len(layers_sizes)-1):
+                layers.append((f'fc{i}',  nn.Linear(layers_sizes[i], layers_sizes[i+1])))
+                layers.append((f'relu{i}',  nn.ReLU()),)
+            layers.append((f'output', nn.Linear(layers_sizes[-1], action_size)))
+            layers.append(('softmax', nn.Softmax(dim=1)), )
 
-        # self.qnetwork_local = QNetwork(state_size, action_size,
-        #                                hidden_layers_sizes=hidden_layer_sizes,
-        #                                seed=seed).to(device)
+            architecture = OrderedDict(layers)
+            self.qnetwork_local = nn.Sequential(architecture).to(device)
+            self.qnetwork_target = nn.Sequential(architecture).to(device)
+        else:
+            architecture = OrderedDict([
+                ('fc1', nn.Linear(state_size, action_size)),
+                ('softmax', nn.Softmax(dim=1))])
+            self.qnetwork_local = nn.Sequential(architecture).to(device)
+            self.qnetwork_target = nn.Sequential(architecture).to(device)
+
         print(f"Initialized model: {self.qnetwork_local}")
-        self.qnetwork_target = nn.Sequential(architecture).to(device)
 
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=LR)
 
