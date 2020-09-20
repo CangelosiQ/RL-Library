@@ -56,9 +56,9 @@ def run(env, agent, brain_name, n_episodes=2000, length_episode=1000, eps_start=
 
         if save_every and save_path and i_episode % save_every == 0:
             print(f'\nSaving model to {save_path}')
-            agent.save(filepath=save_path)
             if not os.path.exists(save_path):
                 os.makedirs(save_path, exist_ok=True)
+            agent.save(filepath=save_path)
             with open(save_path + "/scores.pickle", "wb") as f:
                 pickle.dump(scores, f)
             rolling_mean = plot_scores(scores)
