@@ -13,7 +13,7 @@ BUFFER_SIZE = int(1e4)  # replay buffer size
 BATCH_SIZE = 64  # minibatch size
 GAMMA = 0.95  # discount factor
 TAU = 1e-3  # for soft update of target parameters
-LR = 5e-3  # learning rate
+LR = 5e-4  # learning rate
 UPDATE_EVERY = 4  # how often to update the network
 print(f"/////////////////// torch.cuda.is_available() = {torch.cuda.is_available()}")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -39,11 +39,11 @@ class DQAgent():
         # Q-Network
         from collections import OrderedDict
         architecture = OrderedDict([
-            ('fc1',  nn.Linear(state_size, 20)),
+            ('fc1',  nn.Linear(state_size, 30)),
             ('relu',  nn.ReLU()),
-            ('fc2',  nn.Linear(20, 10)),
+            ('fc2',  nn.Linear(30, 30)),
             ('relu',  nn.ReLU()),
-            ('output', nn.Linear(10, action_size)),
+            ('output', nn.Linear(30, action_size)),
             ('softmax', nn.Softmax(dim=1))])
         self.qnetwork_local = nn.Sequential(architecture).to(device)
 

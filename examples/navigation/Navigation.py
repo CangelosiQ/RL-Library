@@ -6,6 +6,7 @@
 # ### 1. Start the Environment
 # We begin by importing some necessary packages.  If the code cell below returns an error, please revisit the project instructions to double-check that you have installed [Unity ML-Agents](https://github.com/Unity-Technologies/ml-agents/blob/master/docs/Installation.md) and [NumPy](http://www.numpy.org/).
 from unityagents import UnityEnvironment
+import numpy as np
 from rl_library.monitors import unity_monitor
 from rl_library.agents import DQAgent
 
@@ -46,8 +47,8 @@ state_size = len(state)
 print('States have length:', state_size)
 agent = DQAgent(state_size=state_size, action_size=action_size, hidden_layer_sizes=[round(state_size/2), round(state_size/2)])
 
-score = unity_monitor.run(env, agent, brain_name, save_every=200, save_path=".")
-print("Score: {}".format(score))
+scores = unity_monitor.run(env, agent, brain_name, save_every=500, save_path="nn_30_30")
+print("Average Score last 100 episodes: {}".format(np.mean(scores[:-100])))
 
 # When finished, you can close the environment.
 print("Closing...")
