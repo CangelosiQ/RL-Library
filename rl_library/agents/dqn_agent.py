@@ -39,18 +39,21 @@ class DQAgent():
         # Q-Network
         from collections import OrderedDict
         self.qnetwork_local = nn.Sequential(OrderedDict([
-                                                   ('fc1',  nn.ReLU(nn.Linear(state_size, 10))),
-                                                   ] + [
+                                                   ('fc1',  nn.ReLU(nn.Linear(state_size, 20))),
+                                                   ('fc2',  nn.ReLU(nn.Linear(20, 10))),
                                                    ('output', nn.Linear(10, action_size)),
-                                                   ('softmax', nn.Softmax(dim=1))]))
+                                                   ('softmax', nn.Softmax(dim=1))])).to(device)
 
         # self.qnetwork_local = QNetwork(state_size, action_size,
         #                                hidden_layers_sizes=hidden_layer_sizes,
         #                                seed=seed).to(device)
         print(f"Initialized model: {self.qnetwork_local}")
-        self.qnetwork_target = QNetwork(state_size, action_size,
-                                        hidden_layers_sizes=hidden_layer_sizes,
-                                        seed=seed).to(device)
+        self.qnetwork_target = nn.Sequential(OrderedDict([
+                                                   ('fc1',  nn.ReLU(nn.Linear(state_size, 20))),
+                                                   ('fc2',  nn.ReLU(nn.Linear(20, 10))),
+                                                   ('output', nn.Linear(10, action_size)),
+                                                   ('softmax', nn.Softmax(dim=1))])).to(device)
+
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=LR)
 
         # Replay memory
