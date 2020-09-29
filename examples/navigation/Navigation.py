@@ -5,6 +5,8 @@
 #
 # ### 1. Start the Environment
 # We begin by importing some necessary packages.  If the code cell below returns an error, please revisit the project instructions to double-check that you have installed [Unity ML-Agents](https://github.com/Unity-Technologies/ml-agents/blob/master/docs/Installation.md) and [NumPy](http://www.numpy.org/).
+from pathlib import Path
+
 from unityagents import UnityEnvironment
 import numpy as np
 import logging
@@ -18,9 +20,9 @@ from rl_library.agents import DQAgent
 #  INPUTS
 # ---------------------------------------------------------------------------------------------------
 hidden_layer_sizes = [20, 15, 8]
-options = ["double-q-learning"]     # ["double-q-learning",]
+options = ["double-q-learning"]     # ["double-q-learning", "prioritized-replay"]
 mode = "train"                      # "train" or "test"
-save_path = f"double_q_learning_learnevery20_" + "_".join([str(sz) for sz in hidden_layer_sizes])
+save_path = f"DQN_" + "_".join([str(sz) for sz in hidden_layer_sizes])
 os.makedirs(save_path, exist_ok=True)
 # ---------------------------------------------------------------------------------------------------
 
@@ -31,8 +33,8 @@ stream_handler = logging.StreamHandler()
 logger.addHandler(handler)
 logger.addHandler(stream_handler)
 
-
-env = UnityEnvironment(file_name="./Banana.app")  # "./Banana_Linux/Banana.x86"
+path = Path(__file__).parent
+env = UnityEnvironment(file_name=f"{path}/Banana.app")  # "./Banana_Linux/Banana.x86"
 
 # The simulation contains a single agent that navigates a large environment.  At each time step, it has four actions at its disposal:
 # - `0` - walk forward
