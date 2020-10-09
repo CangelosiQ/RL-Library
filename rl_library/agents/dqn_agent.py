@@ -11,7 +11,7 @@ import sys
 from rl_library.agents.models.model import QNetwork
 
 logger = logging.getLogger()
-BUFFER_SIZE = int(1e4)  # replay buffer size
+BUFFER_SIZE = int(1e5)  # replay buffer size
 BATCH_SIZE = 64  # minibatch size
 GAMMA = 0.95  # discount factor
 TAU = 5e-3  # for soft update of target parameters
@@ -227,7 +227,6 @@ class DQAgent():
         self.qnetwork_local.train()
 
         return proba
-
 
     def save(self, filepath):
         checkpoint = {
