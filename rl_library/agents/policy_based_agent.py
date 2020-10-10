@@ -7,8 +7,6 @@ from torch import nn
 import torch.nn.functional as F
 import torch.optim as optim
 import logging
-import sys
-from rl_library.agents.models.model import QNetwork
 
 logger = logging.getLogger()
 BUFFER_SIZE = int(1e5)  # replay buffer size
@@ -21,7 +19,7 @@ MIN_PROBA_EXPERIENCE = 1e-6  # minimum probability for an experience to be chose
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-class DQAgent():
+class PolicyBasedAgent():
     """Interacts with and learns from the environment."""
 
     def __init__(self, state_size, action_size, model: nn.Module = None, hidden_layer_sizes: list = None, seed=42,

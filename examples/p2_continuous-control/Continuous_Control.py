@@ -25,8 +25,8 @@ from rl_library.agents import DQAgent
 #  INPUTS
 # ---------------------------------------------------------------------------------------------------
 hidden_layer_sizes = [20, 15, 8]
-options = ["double-q-learning"]     # ["double-q-learning", "prioritized-replay"]
-mode = "train"                      # "train" or "test"
+options = ["double-q-learning"]  # ["double-q-learning", "prioritized-replay"]
+mode = "train"  # "train" or "test"
 save_path = f"DQN_" + "_".join([str(sz) for sz in hidden_layer_sizes])
 os.makedirs(save_path, exist_ok=True)
 # ---------------------------------------------------------------------------------------------------
@@ -69,9 +69,14 @@ print('The state for the first agent looks like:', states[0])
 # ------------------------------------------------------------
 #  2. Training
 # ------------------------------------------------------------
+def post_process_action(actions):
+    return np.clip(actions, -1, 1)
+
+
 if mode == "train":
     agent = DQAgent(state_size=state_size, action_size=action_size,
-                    hidden_layer_sizes=hidden_layer_sizes, options=options)
+                    hidden_layer_sizes=hidden_layer_sizes, options=options,
+                    post_process_action=post_process_action)
 
     scores = unity_monitor.run(env, agent, brain_name, save_every=500, save_path=save_path)
     logger.info("Average Score last 100 episodes: {}".format(np.mean(scores[-100:])))
