@@ -56,7 +56,7 @@ or for development mode:
     
 
 # Project 1: Navigation
-cf. README [here](./examples/navigation/README.md)
+cf. README [here](examples/p1-navigation/README.md)
 
 
 # Project 2: Continuous Control
