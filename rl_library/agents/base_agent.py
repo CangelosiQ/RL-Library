@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import logging
 import sys
-from rl_library.agents.models.model import QNetwork
+from rl_library.agents.models.bodies import SimpleNeuralNet
 
 logger = logging.getLogger()
 BUFFER_SIZE = int(1e5)  # replay buffer size
@@ -26,7 +26,7 @@ class BaseAgent():
 
     def __init__(self, state_size, action_size, mode: str = "train", seed: int = 42):
         """Initialize an Agent object.
-        
+
         Params
         ======
             state_size (int): dimension of each state
@@ -48,11 +48,11 @@ class BaseAgent():
 
     @staticmethod
     def preprocess_state(state):
-        #return state.flatten()
+        # return state.flatten()
         return state
 
     def act(self, state, eps=0.):
-        pass
+        return np.random.choice(range(self.action_size))
 
     def learn(self, experiences):
         pass

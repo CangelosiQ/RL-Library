@@ -19,10 +19,11 @@ from rl_library.agents import DQAgent
 # ---------------------------------------------------------------------------------------------------
 #  INPUTS
 # ---------------------------------------------------------------------------------------------------
-hidden_layer_sizes = [20, 15, 8]
-options = ["double-q-learning"]     # ["double-q-learning", "prioritized-replay"]
+hidden_layer_sizes = None # [20, 15, 8]
+options = []     # ["double-q-learning", "prioritized-replay"]
 mode = "train"                      # "train" or "test"
-save_path = f"DQN_" + "_".join([str(sz) for sz in hidden_layer_sizes])
+# save_path = f"DQN_" + "_".join([str(sz) for sz in hidden_layer_sizes])
+save_path = f"DQN_simple"
 os.makedirs(save_path, exist_ok=True)
 # ---------------------------------------------------------------------------------------------------
 
