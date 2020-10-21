@@ -8,7 +8,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 import logging
 import sys
-from rl_library.agents.models.bodies import SimpleNeuralNet
+from rl_library.agents.models.bodies import SimpleNeuralNetBody
+from rl_library.agents.models.heads import SimpleNeuralNetHead
 
 logger = logging.getLogger()
 BUFFER_SIZE = int(1e4)  # replay buffer size

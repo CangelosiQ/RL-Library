@@ -27,6 +27,6 @@ class SimpleNeuralNetBody(nn.Module):
     def forward(self, x):
         """Build a network that maps state -> action values."""
         for layer in self.layers:
-            x = self.func(layer(x))
+            x = self.func(layer(x)).to(device)
         return x
 
