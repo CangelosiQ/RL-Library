@@ -1,30 +1,14 @@
-import copy
 import numpy as np
 import random
 from collections import namedtuple, deque, OrderedDict
-import torch
-from torch import nn
-import torch.nn.functional as F
-import torch.optim as optim
 import logging
-import sys
-from rl_library.agents.models.bodies import SimpleNeuralNet
 
-logger = logging.getLogger()
-BUFFER_SIZE = int(1e5)  # replay buffer size
-BATCH_SIZE = 64  # minibatch size
-GAMMA = 0.95  # discount factor
-TAU = 5e-3  # for soft update of target parameters
-LR = 5e-4  # learning rate
-UPDATE_EVERY = 5  # how often to update the network
-MIN_PROBA_EXPERIENCE = 1e-6  # minimum probability for an experience to be chosen
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+logger = logging.getLogger('rl-lib')
 
-
-class BaseAgent():
+class BaseAgent:
     """Interacts with and learns from the environment."""
 
-    def __init__(self, state_size, action_size, mode: str = "train", seed: int = 42):
+    def __init__(self, state_size, action_size, random_seed: int = 42):
         """Initialize an Agent object.
 
         Params
@@ -35,13 +19,14 @@ class BaseAgent():
         """
         self.state_size = state_size
         self.action_size = action_size
-        self.seed = random.seed(seed)
-        self.mode = mode
+        self.seed = random_seed
+        self.random_seed = random.seed(random_seed)
 
         # Initialize time step (for updating every UPDATE_EVERY steps)
         self.t_step = 0
         self.losses = deque(maxlen=100)  # last 100 scores
         self.avg_loss = np.inf
+        self.step_every_action = True
 
     def step(self, state, action, reward, next_state, done):
         pass
