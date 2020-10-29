@@ -18,6 +18,7 @@ import os
 import pandas as pd
 from pathlib import Path
 
+from rl_library.agents.ddpg_agent import DDPGAgent
 from rl_library.monitors import unity_monitor
 from rl_library.agents import DQAgent
 
@@ -25,9 +26,8 @@ from rl_library.agents import DQAgent
 #  INPUTS
 # ---------------------------------------------------------------------------------------------------
 hidden_layer_sizes = [20, 15, 8]
-options = ["double-q-learning"]  # ["double-q-learning", "prioritized-replay"]
 mode = "train"  # "train" or "test"
-save_path = f"DQN_" + "_".join([str(sz) for sz in hidden_layer_sizes])
+save_path = f"DDPG_" + "_".join([str(sz) for sz in hidden_layer_sizes])
 os.makedirs(save_path, exist_ok=True)
 # ---------------------------------------------------------------------------------------------------
 
@@ -74,16 +74,17 @@ def post_process_action(actions):
 
 
 if mode == "train":
-    agent = DQAgent(state_size=state_size, action_size=action_size,
-                    hidden_layer_sizes=hidden_layer_sizes, options=options,
-                    post_process_action=post_process_action)
+    agent = DDPGAgent(state_size=state_size, action_size=action_size,
+                    #hidden_layer_sizes=hidden_layer_sizes,
+                    #post_process_action=post_process_action,
+                      )
 
     scores = unity_monitor.run(env, agent, brain_name, save_every=500, save_path=save_path)
     logger.info("Average Score last 100 episodes: {}".format(np.mean(scores[-100:])))
 
 # Testing
 else:
-    agent = DQAgent.load(filepath=save_path, mode="test")
+    agent = DDPGAgent.load(filepath=save_path, mode="test")
     scores = unity_monitor.run(env, agent, brain_name, n_episodes=10, length_episode=1e6, mode="test")
     logger.info(f"Test Score over {len(scores)} episodes: {np.mean(scores)}")
 

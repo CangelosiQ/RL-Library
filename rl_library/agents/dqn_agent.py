@@ -8,8 +8,11 @@ import torch.nn.functional as F
 import torch.optim as optim
 import logging
 import sys
+
+from rl_library.agents.base_agent import BaseAgent
 from rl_library.agents.models.bodies import SimpleNeuralNetBody
 from rl_library.agents.models.heads import SimpleNeuralNetHead
+from rl_library.utils.replay_buffers import ReplayBuffer
 
 logger = logging.getLogger()
 BUFFER_SIZE = int(1e4)  # replay buffer size
@@ -21,11 +24,11 @@ UPDATE_EVERY = 5  # how often to update the network
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-class DQAgent():
+class DQAgent(BaseAgent):
     """Interacts with and learns from the environment."""
 
-    def __init__(self, state_size, action_size, model: nn.Module = None, hidden_layer_sizes: list = None, seed=42,
-                 options: list = [], mode: str = "train", post_process_action = None):
+    def __init__(self, model: nn.Module = None, hidden_layer_sizes: list = None,
+                 options: list = [], mode: str = "train", post_process_action = None, **kwargs):
         """Initialize an Agent object.
         
         Params
@@ -34,10 +37,8 @@ class DQAgent():
             action_size (int): dimension of each action
             seed (int): random seed
         """
-        self.state_size = state_size
-        self.action_size = action_size
+        super().__init__(**kwargs)
         self.hidden_layers_sizes = hidden_layer_sizes
-        self.seed = random.seed(seed)
         self.mode = mode
 
         # Q-Network
@@ -48,7 +49,7 @@ class DQAgent():
             self._init_with_hidden_layer_sizes()
         else:
             architecture = OrderedDict([
-                ('fc1', nn.Linear(state_size, action_size)),
+                ('fc1', nn.Linear(self.state_size, self.action_size)),
                 ('softmax', nn.Softmax(dim=1))])
             self.qnetwork_local = nn.Sequential(architecture).to(device)
             self.qnetwork_target = nn.Sequential(architecture).to(device)
@@ -58,7 +59,7 @@ class DQAgent():
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=LR)
 
         # Replay memory
-        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
+        self.memory = ReplayBuffer(self.action_size, BUFFER_SIZE, BATCH_SIZE, self.seed)
         # Initialize time step (for updating every UPDATE_EVERY steps)
         self.t_step = 0
         self.losses = deque(maxlen=100)  # last 100 scores

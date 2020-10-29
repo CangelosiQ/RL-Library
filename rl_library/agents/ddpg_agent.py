@@ -9,8 +9,8 @@ import torch.optim as optim
 
 from rl_library.agents.base_agent import BaseAgent
 from rl_library.agents.models.ddpg_model import Actor, Critic
-from rl_library.utils.ou_noise import OUNoise
-from rl_library.utils.replay_buffer import ReplayBuffer
+from rl_library.utils.noises import OUNoise
+from rl_library.utils.replay_buffers import ReplayBuffer
 
 BUFFER_SIZE = int(1e6)  # replay buffer size
 BATCH_SIZE = 128        # minibatch size
@@ -72,6 +72,12 @@ class DDPGAgent(BaseAgent):
         self.actor_local.train()
         if add_noise:
             action += self.noise.sample()
+
+        # This is the behaviour in finance/ddpagent.py
+        # TODO
+        #        action = (action + 1.0) / 2.0
+        #        return np.clip(action, 0, 1)
+
         return np.clip(action, -1, 1)
 
     def reset(self):
