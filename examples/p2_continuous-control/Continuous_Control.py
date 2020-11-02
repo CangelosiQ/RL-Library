@@ -17,11 +17,12 @@ import logging
 import os
 import pandas as pd
 from pathlib import Path
+import torch.nn.functional as F
 
 from rl_library.agents.ddpg_agent import DDPGAgent
+from rl_library.agents.models.bodies import SimpleNeuralNetBody
+from rl_library.agents.models.heads import SimpleNeuralNetHead, DeepNeuralNetHeadCritic
 from rl_library.monitors import unity_monitor
-from rl_library.agents import DQAgent
-
 # ---------------------------------------------------------------------------------------------------
 #  INPUTS
 # ---------------------------------------------------------------------------------------------------
@@ -74,10 +75,17 @@ def post_process_action(actions):
 
 
 if mode == "train":
+
+    actor = SimpleNeuralNetHead(action_size, SimpleNeuralNetBody(state_size, (20, 12,)),
+                                func=F.tanh)
+
+    critic = DeepNeuralNetHeadCritic(action_size, SimpleNeuralNetBody(state_size, (20,),
+                                                                          func=F.leaky_relu),
+                                     hidden_layers_sizes=(12, 6,),
+                                     end_func=None)
+
     agent = DDPGAgent(state_size=state_size, action_size=action_size,
-                    #hidden_layer_sizes=hidden_layer_sizes,
-                    #post_process_action=post_process_action,
-                      )
+                      model_actor=actor, model_critic=critic)
 
     scores = unity_monitor.run(env, agent, brain_name, save_every=500, save_path=save_path)
     logger.info("Average Score last 100 episodes: {}".format(np.mean(scores[-100:])))

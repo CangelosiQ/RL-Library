@@ -9,6 +9,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 def plot_scores(scores, rolling_window=100, path: str = '.', threshold=None, prefix=""):
     """Plot scores and optional rolling mean using specified window."""
+    plt.figure(figsize=(15,8))
     plt.plot(scores, "c"); plt.title("Scores")
     plt.xlabel('Episode #')
     plt.ylabel('Score')

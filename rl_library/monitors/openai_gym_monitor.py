@@ -39,6 +39,8 @@ class GymMonitor:
         self.eps_decay = 0.995
         self.threshold = threshold
 
+        self.agent_losses = []
+
     @staticmethod
     def _get_space_size(space) -> int:
         if isinstance(space, Discrete):
@@ -70,6 +72,7 @@ class GymMonitor:
 
         scores_window = deque(maxlen=100)  # last 100 scores
         eps = self.eps_start  # initialize epsilon
+        t = None
         for i_episode in range(1, n_episodes + 1):
             state = self.env.reset()
             score = 0
@@ -77,8 +80,8 @@ class GymMonitor:
             rewards = []
             states = [state]
             for t in range(int(length_episode)):
-                action = agent.act(state, eps)
-                # print(f"Action: {action} Processed: {self.process_action(action)}")
+                action = agent.act(state, eps=eps, add_noise=True)
+                # print(f"\rAction: {action} Processed: {self.process_action(action)}", end="")
                 next_state, reward, done, _ = self.env.step(self.process_action(action))  # send the action to the
                 # environment
 
@@ -101,7 +104,7 @@ class GymMonitor:
             scores_window.append(score)  # save most recent score
             scores.append(score)  # save most recent score
             eps = max(self.eps_end, self.eps_decay * eps)  # decrease epsilon
-            solved = self.logging(i_episode, scores_window, score, eps, mode, solved, agent)
+            solved = self.logging(i_episode, scores_window, score, eps, mode, solved, agent, t)
 
             self.intermediate_save(save_every, i_episode, scores, agent, save_path, mode, save_prefix)
 
@@ -111,12 +114,17 @@ class GymMonitor:
         logger.info(f"Elapsed Time: {pd.Timedelta(te - ts)}")
         return scores
 
-    def logging(self, i_episode, scores_window, score, eps, mode, solved, agent):
-        print(f'\rEpisode {i_episode}\tAverage Score: {np.mean(scores_window):.2f}, DQN Avg. Loss: '
-              f'{agent.avg_loss:.2e}, Last Score: {score:.2f}, eps: {eps:.2f}', end="")
+    def logging(self, i_episode, scores_window, score, eps, mode, solved, agent, n_steps):
+        self.agent_losses.append(float(agent.avg_loss))
+        mean_loss = np.mean(self.agent_losses[:-min(len(self.agent_losses), 100)])
+        log = f'\rEpisode {i_episode}\tAverage Score: {np.mean(scores_window):.2f}, Agent Loss: '\
+              f'{mean_loss:.2e}, Last Score: {score:.2f} '\
+              f'({n_steps} '\
+              f'steps), '\
+              f'eps: {eps:.2f}'
+        print(log, end="")
         if i_episode % 100 == 0:
-            logger.info(f'\rEpisode {i_episode}\tAverage Score: {np.mean(scores_window):.2f}, DQN Avg. Loss: '
-                        f'{agent.avg_loss:.2e}, Last Score: {score:.2f}')
+            logger.info(log)
 
         if self.threshold and np.mean(scores_window) >= self.threshold and mode == "train" and not solved:
             logger.warning(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score:'
@@ -132,7 +140,8 @@ class GymMonitor:
             agent.save(filepath=save_path)
             with open(save_path + "/scores.pickle", "wb") as f:
                 pickle.dump(scores, f)
-            rolling_mean = plot_scores(scores, path=save_path, threshold=self.threshold, prefix=save_prefix)
+            plot_scores(scores, path=save_path, threshold=self.threshold, prefix=save_prefix)
+            plot_scores(self.agent_losses, path=save_path, prefix=save_prefix + '_agent_loss')
 
     def save_and_plot(self, scores, agent, save_path, mode, save_prefix):
         if save_path and mode == "train":
@@ -141,9 +150,10 @@ class GymMonitor:
             agent.save(filepath=save_path)
             with open(save_path + "/scores.pickle", "wb") as f:
                 pickle.dump(scores, f)
-            rolling_mean = plot_scores(scores, path=save_path, threshold=self.threshold, prefix=save_prefix)
+            plot_scores(scores, path=save_path, threshold=self.threshold, prefix=save_prefix)
+            plot_scores(self.agent_losses, path=save_path, prefix=save_prefix+'_agent_loss')
         elif mode == "test":
-            rolling_mean = plot_scores(scores, path=".", threshold=self.threshold, prefix=save_prefix)
+            plot_scores(scores, path=".", threshold=self.threshold, prefix=save_prefix)
 
     def step(self, actions):
         if isinstance(self.action_space, Box):
@@ -152,7 +162,7 @@ class GymMonitor:
 
     def play(self, agent):
         state = self.env.reset()
-        for t in range(1000):
+        for _ in range(2000):
             action = agent.act(state)
             self.env.render()
             state, reward, done, _ = self.env.step(action)
