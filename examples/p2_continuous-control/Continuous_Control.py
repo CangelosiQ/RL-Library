@@ -26,6 +26,8 @@ from rl_library.monitors import unity_monitor
 # ---------------------------------------------------------------------------------------------------
 #  INPUTS
 # ---------------------------------------------------------------------------------------------------
+from rl_library.monitors.unity_monitor import UnityMonitor
+
 hidden_layer_sizes = [20, 15, 8]
 mode = "train"  # "train" or "test"
 save_path = f"DDPG_" + "_".join([str(sz) for sz in hidden_layer_sizes])
@@ -43,7 +45,8 @@ path = Path(__file__).parent
 # ------------------------------------------------------------
 #  1. Initialization
 # ------------------------------------------------------------
-env = UnityEnvironment(file_name='./Reacher 2.app')
+env_name = "Reacher 2"
+env = UnityEnvironment(file_name=f'./{env_name}.app')
 
 # get the default brain
 brain_name = env.brain_names[0]
@@ -80,14 +83,16 @@ if mode == "train":
                                 func=F.tanh)
 
     critic = DeepNeuralNetHeadCritic(action_size, SimpleNeuralNetBody(state_size, (20,),
-                                                                          func=F.leaky_relu),
+                                                                      func=F.leaky_relu),
                                      hidden_layers_sizes=(12, 6,),
                                      end_func=None)
 
     agent = DDPGAgent(state_size=state_size, action_size=action_size,
-                      model_actor=actor, model_critic=critic)
+                      model_actor=actor, model_critic=critic, action_space_low=None, action_space_high=None)
 
-    scores = unity_monitor.run(env, agent, brain_name, save_every=500, save_path=save_path)
+    scores = UnityMonitor(env_name=env_name, env=env).run(agent, n_episodes=2000, length_episode=500, mode="train",
+                                                          reload_path=None, save_every=500,
+                                                          save_path=save_path)
     logger.info("Average Score last 100 episodes: {}".format(np.mean(scores[-100:])))
 
 # Testing

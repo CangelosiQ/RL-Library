@@ -5,7 +5,7 @@ from collections import namedtuple, deque, OrderedDict
 import torch
 import logging
 
-logger = logging.getLogger("rl-library.replay-buffer")
+logger = logging.getLogger("rllib.replay-buffer")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 

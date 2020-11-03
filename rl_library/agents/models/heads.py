@@ -6,10 +6,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import logging
+import numpy as np
 
-logger = logging.getLogger("rl-library")
+logger = logging.getLogger("rllib")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+def hidden_init(layer):
+    fan_in = layer.weight.data.size()[0]
+    lim = 1. / np.sqrt(fan_in)
+    return (-lim, lim)
 
 class SimpleNeuralNetHead(nn.Module):
     """Actor (Policy) Model."""
@@ -26,6 +31,7 @@ class SimpleNeuralNetHead(nn.Module):
         self.body = body
         self.head = nn.Linear(body.layers_sizes[-1], action_size)
         self.func = func
+        self.reset_parameters()
         logger.info(f"Initialized {self.__class__.__name__} with body : {self.body.layers} and head {self.head}")
 
     def forward(self, x):
@@ -39,6 +45,9 @@ class SimpleNeuralNetHead(nn.Module):
                 x = self.func(x).to(device)
 
         return x
+
+    def reset_parameters(self):
+        self.body.reset_parameters()
 
 
 class DeepNeuralNetHeadCritic(nn.Module):
@@ -76,3 +85,10 @@ class DeepNeuralNetHeadCritic(nn.Module):
                 x = self.end_func(x).to(device)
 
         return x
+
+    def reset_parameters(self):
+        self.body.reset_parameters()
+        for l in self.layers[:-1]:
+            l.weight.data.uniform_(*hidden_init(l))
+
+        self.layers[-1].weight.data.uniform_(-3e-3, 3e-3)

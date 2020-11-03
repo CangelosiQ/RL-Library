@@ -1,33 +1,35 @@
 import numpy as np
 import random
 import copy
-from collections import namedtuple, deque
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
+import logging
 
 from rl_library.agents.base_agent import BaseAgent
-from rl_library.agents.models.ddpg_model import Actor, Critic
 from rl_library.utils.noises import OUNoise
 from rl_library.utils.replay_buffers import ReplayBuffer
 
-BUFFER_SIZE = int(1e5)  # replay buffer size
-BATCH_SIZE = 128        # minibatch size
-GAMMA = 0.99            # discount factor
-TAU = 1e-3              # for soft update of target parameters
-LR_ACTOR = 1e-4         # learning rate of the actor 
-LR_CRITIC = 3e-4        # learning rate of the critic
-WEIGHT_DECAY = 0.0001   # L2 weight decay
-UPDATE_EVERY = 2
+
+BUFFER_SIZE = int(1e6)  # replay buffer size
+BATCH_SIZE = 256        # minibatch size
+GAMMA = 0.8            # discount factor
+TAU = 1e-2              # for soft update of target parameters
+LR_ACTOR = 1e-4         # learning rate of the actor
+LR_CRITIC = 1e-4        # learning rate of the critic
+WEIGHT_DECAY = 0.#0001   # L2 weight decay
+UPDATE_EVERY = 1
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+logger = logging.getLogger("rllib.ddpgagent")
 
 
 class DDPGAgent(BaseAgent):
     """Interacts with and learns from the environment."""
     
-    def __init__(self, model_actor: nn.Module,  model_critic: nn.Module, **kwargs):
+    def __init__(self, model_actor: nn.Module,  model_critic: nn.Module, action_space_high, action_space_low,
+                 **kwargs):
         """Initialize an Agent object.
         
         Params
@@ -53,10 +55,13 @@ class DDPGAgent(BaseAgent):
         self.parameter_noise = [OUNoise(l.weight.data.size(), self.random_seed) for l in self.actor_local.body.layers]
         # Replay memory
         self.memory = ReplayBuffer(self.action_size, BUFFER_SIZE, BATCH_SIZE, self.random_seed)
-    
+        self.action_space_low = action_space_low
+        self.action_space_high = action_space_high
+
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
         # Save experience / reward
+        # logger.debug(f"State= {state}, Action={action}, Reward={reward}, done={done}")
         self.memory.add(state, action, reward, next_state, done)
 
         # Learn every UPDATE_EVERY time steps.
@@ -74,22 +79,33 @@ class DDPGAgent(BaseAgent):
         self.actor_local.eval()
         with torch.no_grad():
             if add_noise and self.t_step == 0:
+                previous_weights = {}
                 for l, noise in zip(self.actor_local.body.layers, self.parameter_noise):
-                    # print(f"before {np.mean(l.weight.data.numpy())}")
+            #         # print(f"before {np.mean(l.weight.data.numpy())}")
                     if random.random() < eps: # Only affect some layers at a time
-                        l.weight.data += eps * (torch.tensor(np.random.random(l.weight.data.size())-0.5))
+                        # l.weight.data += eps/10 * (torch.tensor(np.random.random(l.weight.data.size())-0.5))
+                        std = max(min(np.std(l.weight.data.numpy()), 1), 0.1)
+                        random_noise = eps * (torch.tensor((np.random.random(l.weight.data.numpy().shape)-0.5)*std))
+                        previous_weights[l] = copy.deepcopy(l.weight.data)
+                        l.weight.data += random_noise
+
                     # print(f"after {np.mean(l.weight.data.numpy())}")
             action = self.actor_local(state).cpu().data.numpy()
+            if add_noise and self.t_step == 0:
+                for l, noise in zip(self.actor_local.body.layers, self.parameter_noise):
+                    if l in previous_weights:
+                        l.weight.data = previous_weights[l]
+
+        # logger.debug(f"State= {state}, Action={action}")
         self.actor_local.train()
         # if add_noise:
-        #     action += self.noise.sample()
-
-        # This is the behaviour in finance/ddpagent.py
-        # TODO
-        #        action = (action + 1.0) / 2.0
-        #        return np.clip(action, 0, 1)
-
-        return np.clip(action, -1, 1)
+            # noise = self.noise.sample()
+            # noise = np.random.random(action.shape)
+            # action += eps*(2*noise-1) # OUNoise seems always between 0.5 and 1 thus biasing the actions
+            # logger.debug(f"Noisy Action={action} Noise={noise}")
+        action = np.clip(action, self.action_space_low, self.action_space_high)
+        # logger.debug(f"Clipped Action: {action}")
+        return action
 
     def reset(self):
         self.noise.reset()
