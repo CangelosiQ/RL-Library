@@ -36,11 +36,5 @@ class SimpleNeuralNetBody(nn.Module):
             x = self.func(layer(x)).to(device)
         return x
 
-    def reset_parameters(self):
-
-        for l in self.layers:
-            l.weight.data.uniform_(*hidden_init(l))
-
-#        self.layers[-1].weight.data.uniform_(-3e-3, 3e-3)
 
 

@@ -14,47 +14,44 @@ logging.basicConfig(filename=log_fn,
                     level=logging.DEBUG)
 logger = logging.getLogger()
 
-# formatter = logging.Formatter(
-#     '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-# Setup log file
-
-# file_handler = logging.FileHandler()
-# file_handler.setFormatter(formatter)
-# file_handler.setLevel(logging.DEBUG)
-# stream_handler = logging.StreamHandler()
-# stream_handler.setLevel(logging.INFO)
-# logger.addHandler(file_handler)
-# logger.addHandler(stream_handler)
-
 from rl_library.agents.ddpg_agent import DDPGAgent
 from rl_library.agents.models.bodies import SimpleNeuralNetBody
 from rl_library.agents.models.heads import SimpleNeuralNetHead, DeepNeuralNetHeadCritic
 from rl_library.monitors.openai_gym_monitor import GymMonitor
 
-
 seed = torch.manual_seed(42)
 
 env = GymMonitor(env_name='BipedalWalker-v3')
 
-actor = SimpleNeuralNetHead(env.action_size, SimpleNeuralNetBody(env.state_size, (50, 30,), func=F.leaky_relu),
+actor = SimpleNeuralNetHead(env.action_size, SimpleNeuralNetBody(env.state_size, (60, 40, 20), func=F.relu),
                             func=F.tanh)
 
-critic = DeepNeuralNetHeadCritic(env.action_size, SimpleNeuralNetBody(env.state_size, (50, 30),
-                                                                      func=F.leaky_relu),
-                                 hidden_layers_sizes=(30,),
+critic = DeepNeuralNetHeadCritic(env.action_size, SimpleNeuralNetBody(env.state_size, (60, ),
+                                                                      func=F.relu),
+                                 hidden_layers_sizes=(40, 20),
                                  end_func=None,
-                                 func=F.leaky_relu)
+                                 func=F.relu)
 
 agent = DDPGAgent(state_size=env.state_size, action_size=env.action_size,
                   model_actor=actor, model_critic=critic, action_space_high=env.action_space.high,
-                  action_space_low=env.action_space.low)
+                  action_space_low=env.action_space.low, config=dict(warmup=1e4,
+                                                                     ),
+                  hyper_parameters=dict(TAU=1e-3,  # for soft update of target parameters
+                                        BUFFER_SIZE=int(1e5),  # replay buffer size
+                                        BATCH_SIZE=128,  # minibatch size
+                                        GAMMA=0.99,  # discount factor
+                                        LR_ACTOR=1e-3,  # learning rate of the actor
+                                        LR_CRITIC=1e-3,  # learning rate of the critic
+                                        WEIGHT_DECAY=0.001,  # L2 weight decay
+                                        UPDATE_EVERY=1,
+                                        ))
 
 env.run(agent,
         n_episodes=2000,
         length_episode=1000,
         mode="train",
         reload_path=None,
-        save_every=2000,
-        render=True,
+        save_every=100,
+        render=False,
         save_path="../../figures")
 env.play(agent)

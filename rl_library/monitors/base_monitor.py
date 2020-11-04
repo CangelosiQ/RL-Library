@@ -20,7 +20,7 @@ class Monitor:
         self.env = None
         self.eps_start = 1.0
         self.eps_end = 0.01
-        self.eps_decay = 0.9995
+        self.eps_decay = 0.995
         self.threshold = threshold
         self.agent_losses = []
 
@@ -62,17 +62,20 @@ class Monitor:
             states = [state]
             for t in range(int(length_episode)):
                 action = agent.act(state, eps=eps, add_noise=True)
-                last_actions.append(action)
-                last_states.append(state)
-                if len(last_actions) == 100:
-                    diff = np.sum(np.std(last_actions, 0))
-                    diff_state = np.sum(np.std(last_states, 0))
-                    if diff < 0.4 and diff_state < 0.2:
-                        print(f"Episode {i_episode}: AGENT STUCK! diff={diff}, diff_state={diff_state}")
-                        break
 
                 # print(f"\rAction: {action} Processed: {self.process_action(action)}", end="")
                 next_state, reward, done, _ = self.env_step(self.process_action(action))  # send the action to the
+
+                # last_actions.append(action)
+                # last_states.append(state)
+                # if len(last_actions) == 100:
+                #     diff = np.sum(np.std(last_actions, 0))
+                #     diff_state = np.sum(np.std(last_states, 0))
+                #     if diff < 0.4 and diff_state < 0.2:
+                #         print(f"Episode {i_episode}: AGENT STUCK! diff={diff}, diff_state={diff_state}, {action}")
+                #         reward -= 0.01
+                        # break
+
                 # environment
                 if render:
                     self.env.render()

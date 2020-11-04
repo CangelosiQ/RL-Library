@@ -8,7 +8,7 @@ logger = logging.getLogger('rllib')
 class BaseAgent:
     """Interacts with and learns from the environment."""
 
-    def __init__(self, state_size, action_size, random_seed: int = 42):
+    def __init__(self, state_size, action_size, config: dict):
         """Initialize an Agent object.
 
         Params
@@ -19,14 +19,15 @@ class BaseAgent:
         """
         self.state_size = state_size
         self.action_size = action_size
-        self.seed = random_seed
-        self.random_seed = random.seed(random_seed)
+        self.seed = config.get("random_seed")
+        self.random_seed = random.seed(self.seed)
 
         # Initialize time step (for updating every UPDATE_EVERY steps)
         self.t_step = 0
         self.losses = deque(maxlen=100)  # last 100 scores
         self.avg_loss = np.inf
         self.step_every_action = True
+        self.warmup = config.get("warmup", 0)       # Number of actions to randomly do without any training as warmup
 
     def step(self, state, action, reward, next_state, done):
         pass
