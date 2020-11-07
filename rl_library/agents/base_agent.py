@@ -19,7 +19,7 @@ class BaseAgent:
         """
         self.state_size = state_size
         self.action_size = action_size
-        self.seed = config.get("random_seed")
+        self.seed = config.get("random_seed", 42)
         self.random_seed = random.seed(self.seed)
 
         # Initialize time step (for updating every UPDATE_EVERY steps)

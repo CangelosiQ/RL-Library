@@ -21,7 +21,7 @@ def hidden_init(layer):
 class SimpleNeuralNetHead(nn.Module):
     """Actor (Policy) Model."""
 
-    def __init__(self, action_size, body, func=F.softmax):
+    def __init__(self, action_size, body, func=F.softmax, seed=42):
         """Initialize parameters and build model.
         Params
         ======
@@ -30,6 +30,7 @@ class SimpleNeuralNetHead(nn.Module):
             seed (int): Random seed
         """
         super(SimpleNeuralNetHead, self).__init__()
+        self.seed = np.random.seed(seed)
         self.body = body
         self.head = nn.Linear(body.layers_sizes[-1], action_size)
         self.func = func
@@ -58,7 +59,8 @@ class SimpleNeuralNetHead(nn.Module):
 class DeepNeuralNetHeadCritic(nn.Module):
     """Actor (Policy) Model."""
 
-    def __init__(self, action_size, body, func=F.leaky_relu, end_func=F.softmax, hidden_layers_sizes: tuple = (10,)):
+    def __init__(self, action_size, body, func=F.leaky_relu, end_func=F.softmax, hidden_layers_sizes: tuple = (10,),
+                 seed=42):
         """Initialize parameters and build model.
         Params
         ======
@@ -67,6 +69,7 @@ class DeepNeuralNetHeadCritic(nn.Module):
             seed (int): Random seed
         """
         super(DeepNeuralNetHeadCritic, self).__init__()
+        self.seed = np.random.seed(seed)
         self.body = body
         self.layers_sizes = (body.layers_sizes[-1] + action_size,) + hidden_layers_sizes + (action_size,)
 

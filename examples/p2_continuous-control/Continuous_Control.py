@@ -19,12 +19,15 @@ TODO:
     DONE - split agent scores between actor and critic to follow better what is hapening there
     DONE - instead of epsilon decay, split into evaluation and exploration phases (eg. evaluate for 1 episode every 50
     episodes?)
+    DONE - scale=1 for OUNoise
     - Double DDDPG? Rainbow DDPG?
     - Try even more extreme Discount factor
     - change noise (try random noise, adaptive noise)
-    - disable batch normalization
+    - parameter noise
+    - activate batch normalization
     - do running mean normalization
-    - scale=1 for OUNoise
+    - slowly decaying the learning rate as the model approaches an optima
+    - parameter noise
 
 """
 
@@ -45,7 +48,8 @@ import torch
 import json
 import sys
 import torch.nn.functional as F
-
+np.random.seed(42)
+torch.manual_seed(42)
 # ---------------------------------------------------------------------------------------------------
 #  Logger
 # ---------------------------------------------------------------------------------------------------
@@ -60,6 +64,7 @@ logger = logging.getLogger()
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
 
 handler = logging.FileHandler(f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log")
+handler.setLevel(logging.DEBUG)
 handler.setFormatter(formatter)
 # stream_handler = logging.StreamHandler()
 # stream_handler.setFormatter(formatter)
@@ -83,7 +88,7 @@ from rl_library.monitors.unity_monitor import UnityMonitor
 config = dict(
     # Environment parameters
     env_name="Reacher 2",
-    n_episodes=200,
+    n_episodes=500,
     length_episode=1500,
     save_every=50,
     save_path=save_path,
@@ -103,15 +108,15 @@ config = dict(
     BUFFER_SIZE=int(1e6),               # replay buffer size
     BATCH_SIZE=64,                      # minibatch size
     GAMMA=0.99,                          # discount factor
-    LR_ACTOR=5e-4,                      # learning rate of the actor
+    LR_ACTOR=1e-4,                      # learning rate of the actor
     LR_CRITIC=1e-3,                     # learning rate of the critic
     WEIGHT_DECAY=0.01,                  # L2 weight decay
     UPDATE_EVERY=1,                     # Number of actions before making a learning step
     action_noise="OU",                  #
     weights_noise=None,                 #
     batch_normalization=None,           #
-    warmup=1e4,                           # Number of random actions to start with as a warm-up
-    start_time=pd.Timestamp.utcnow()
+    warmup=0,                           # Number of random actions to start with as a warm-up
+    start_time=str(pd.Timestamp.utcnow()),
 )
 
 # ------------------------------------------------------------

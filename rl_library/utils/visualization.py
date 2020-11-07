@@ -8,22 +8,34 @@ import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
-def plot_scores(scores, rolling_window=100, path: str = '.', threshold=None, prefix=""):
+def plot_scores(scores, rolling_window="auto", path: str = '.', threshold=None, prefix="", log=False):
     """Plot scores and optional rolling mean using specified window."""
+    if rolling_window == "auto":
+        rolling_window = round(len(scores) / 4)
+
     plt.figure(figsize=(15, 8))
     if type(scores[0]) not in [float, int,] and len(scores[0]) > 1:
         scores = np.array(scores)
         nr, nc = scores.shape
         for d in range(scores.shape[1]):
             plt.subplot(nc, 1, d+1)
-            plt.plot(scores[:, d], "c")
-            rolling_mean = pd.Series(scores[:, d]).rolling(rolling_window).mean()
-            plt.plot(rolling_mean, "k")
+            rolling_mean = pd.Series(scores[:, d]).rolling(rolling_window).mean().abs()
+            if log:
+                plt.semilogy(np.abs(scores[:, d]), "c", label=f"sign: "
+                                                              f"{int(pd.Series(np.sign(scores[:,d])).mode())}")
+                plt.semilogy(rolling_mean, "k")
+            else:
+                plt.plot(scores[:, d], "c")
+                plt.plot(rolling_mean, "k")
 
     else:
-        plt.plot(scores, "c")
-        rolling_mean = pd.Series(scores).rolling(rolling_window).mean()
-        plt.plot(rolling_mean, "k")
+        rolling_mean = pd.Series(scores).rolling(rolling_window).mean().abs()
+        if log:
+            plt.semilogy(np.abs(scores), "c")
+            plt.semilogy(rolling_mean, "k")
+        else:
+            plt.plot(scores, "c")
+            plt.plot(rolling_mean, "k")
         if threshold:
             plt.axhline(threshold, c="r", ls="--", label=f"Objective: {threshold}")
 

@@ -16,6 +16,7 @@ class GymMonitor(Monitor):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.env = gym.make(self.env_name)
+        self.env.seed(self.seed)
         self.action_space = self.env.action_space
         self.observation_space = self.env.observation_space
         logger.info(f'Actions Space: {self.action_space}')

@@ -20,7 +20,7 @@ class Monitor:
     def __init__(self, config: dict):
         self.env_name = config["env_name"]
         self.env = None
-
+        self.seed = config.get("random_seed", 42)
 
         self.threshold = config.get("threshold")
         self.agent_losses = []
@@ -184,7 +184,7 @@ class Monitor:
             if not self.render:
                 plot_scores(scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix)
                 plot_scores(evaluation_scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix + '_evaluation')
-                plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss')
+                plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss', log=True)
 
 
     def save_and_plot(self, scores, agent, save_prefix, evaluation_scores):
@@ -198,7 +198,7 @@ class Monitor:
                 plot_scores(scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix)
                 plot_scores(evaluation_scores, path=self.save_path, threshold=self.threshold,
                             prefix=save_prefix + '_evaluation')
-                plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss')
+                plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss', log=True)
         elif self.mode == "test":
             plot_scores(scores, path=".", threshold=self.threshold, prefix=save_prefix)
 

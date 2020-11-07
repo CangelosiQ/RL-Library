@@ -111,7 +111,7 @@ class DDPGAgent(BaseAgent):
 
         return (states, actions, rewards, next_states, dones)
 
-    def act(self, state, eps: float = 1):
+    def act(self, state, eps: float = 0):
         """Returns actions for given state as per current policy."""
         if self.warmup > 0:
             # Random action
@@ -143,14 +143,16 @@ class DDPGAgent(BaseAgent):
             #             l.weight.data = previous_weights[l]
 
         # logger.debug(f"State= {state}, Action={action}")
-        self.actor_local.train()
+
         if self.action_noise is not None:
             noise = self.action_noise.sample()
             # noise = 2*np.random.random(action.shape) - 1
-            action += noise
-            # logger.debug(f"Noisy Action={action} Noise={noise}")
+            action += eps * noise
+            logger.debug(f"Noisy Action={action} Noise={noise}")
         action = np.clip(action, self.action_space_low, self.action_space_high)
-        # logger.debug(f"Clipped Action: {action}")
+        logger.debug(f"Clipped Action: {action}")
+
+        self.actor_local.train()
         return action
 
     def reset(self):

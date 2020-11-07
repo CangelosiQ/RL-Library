@@ -14,7 +14,7 @@ def hidden_init(layer):
 class SimpleNeuralNetBody(nn.Module):
     """Actor (Policy) Model."""
 
-    def __init__(self, state_size, hidden_layers_sizes: tuple = (10, ), func= F.relu):
+    def __init__(self, state_size, hidden_layers_sizes: tuple = (10, ), func= F.relu, seed=42):
         """Initialize parameters and build model.
         Params
         ======
@@ -23,6 +23,7 @@ class SimpleNeuralNetBody(nn.Module):
             seed (int): Random seed
         """
         super(SimpleNeuralNetBody, self).__init__()
+        self.seed = np.random.seed(seed)
         self.layers_sizes = (state_size,) + hidden_layers_sizes
 
         self.layers = nn.ModuleList(
