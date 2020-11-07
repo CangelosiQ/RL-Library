@@ -146,9 +146,8 @@ class DDPGAgent(BaseAgent):
         self.actor_local.train()
         if self.action_noise is not None:
             noise = self.action_noise.sample()
-            # noise = np.random.random(action.shape)
-            # action += eps*(2*noise-1)
-            action += eps * noise
+            # noise = 2*np.random.random(action.shape) - 1
+            action += noise
             # logger.debug(f"Noisy Action={action} Noise={noise}")
         action = np.clip(action, self.action_space_low, self.action_space_high)
         # logger.debug(f"Clipped Action: {action}")
@@ -211,3 +210,13 @@ class DDPGAgent(BaseAgent):
         """
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
             target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
+
+    def enable_evaluation_mode(self):
+        self.action_noise_backup = self.action_noise
+        self.param_noise_backup = self.parameter_noise
+        self.action_noise = None
+        self.param_noise = None
+
+    def disable_evaluation_mode(self):
+        self.action_noise = self.action_noise_backup
+        self.param_noise = self.param_noise_backup

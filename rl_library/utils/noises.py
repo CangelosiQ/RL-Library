@@ -2,18 +2,21 @@ import random
 import numpy as np
 import copy
 
-
+# from https://github.com/songrotek/DDPG/blob/master/ou_noise.py
+# Based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
 class OUNoise:
     """Ornstein-Uhlenbeck process."""
 
-    def __init__(self, size, seed, mu=0., theta=0.15, sigma=0.2):
+    def __init__(self, size, seed, scale=0.1, mu=0., theta=0.15, sigma=0.2, dt=1):
         """Initialize parameters and noise process."""
         self.mu = mu * np.ones(size)
+        self.scale = scale
         self.size = size
         self.theta = theta
         self.sigma = sigma
         self.seed = random.seed(seed)
         self.reset()
+        self.dt = dt
 
     def reset(self):
         """Reset the internal state (= noise) to mean (mu)."""
@@ -22,31 +25,10 @@ class OUNoise:
     def sample(self):
         """Update internal state and return it as a noise sample."""
         x = self.state
-        dx = self.theta * (self.mu - x) + self.sigma * np.random.random(self.size)
+        dx = self.theta * (self.mu - x) * self.dt + self.sigma * np.random.normal(size=self.size) * np.sqrt(self.dt)
         self.state = x + dx
-        return self.state
+        return self.state * self.scale
 
-# TODO: Compare and merge (performance)
-# # from https://github.com/songrotek/DDPG/blob/master/ou_noise.py
-# class OUNoise:
-#
-#     def __init__(self, action_dimension, scale=0.1, mu=0, theta=0.15, sigma=0.2):
-#         self.action_dimension = action_dimension
-#         self.scale = scale
-#         self.mu = mu
-#         self.theta = theta
-#         self.sigma = sigma
-#         self.state = np.ones(self.action_dimension) * self.mu
-#         self.reset()
-#
-#     def reset(self):
-#         self.state = np.ones(self.action_dimension) * self.mu
-#
-#     def noise(self):
-#         x = self.state
-#         dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
-#         self.state = x + dx
-#         return torch.tensor(self.state * self.scale).float()
 
 # TODO Adapt
 # import numpy as np
@@ -95,24 +77,3 @@ class OUNoise:
 #     def __repr__(self):
 #         return 'NormalActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
 #
-#
-# # Based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
-# class OrnsteinUhlenbeckActionNoise(ActionNoise):
-#     def __init__(self, mu, sigma, theta=.15, dt=1e-2, x0=None):
-#         self.theta = theta
-#         self.mu = mu
-#         self.sigma = sigma
-#         self.dt = dt
-#         self.x0 = x0
-#         self.reset()
-#
-#     def __call__(self):
-#         x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.mu.shape)
-#         self.x_prev = x
-#         return x
-#
-#     def reset(self):
-#         self.x_prev = self.x0 if self.x0 is not None else np.zeros_like(self.mu)
-#
-#     def __repr__(self):
-#         return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)

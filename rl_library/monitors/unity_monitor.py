@@ -33,7 +33,7 @@ class UnityMonitor(Monitor):
         print('There are {} agents. Each observes a state with length: {}'.format(states.shape[0], self.state_size))
         print('The state for the first agent looks like:', states[0])
 
-    def reset(self):
+    def reset_env(self):
         # reset the environment
         env_info = self.env.reset(train_mode=True)[self.brain_name]
         return env_info.vector_observations[0]

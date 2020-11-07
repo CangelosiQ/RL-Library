@@ -39,7 +39,7 @@ class GymMonitor(Monitor):
             assert f'Unknown space {space}'
         return size
 
-    def reset(self):
+    def reset_env(self):
         return self.env.reset()
 
     def env_step(self, action):

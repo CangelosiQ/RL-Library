@@ -17,13 +17,14 @@ TODO:
     DONE - Proper Book-Keeeping
     DONE - Raise number of episode to 2000 to approximately match the DDPG 2.5 million steps in the results table
     DONE - split agent scores between actor and critic to follow better what is hapening there
+    DONE - instead of epsilon decay, split into evaluation and exploration phases (eg. evaluate for 1 episode every 50
+    episodes?)
     - Double DDDPG? Rainbow DDPG?
     - Try even more extreme Discount factor
     - change noise (try random noise, adaptive noise)
     - disable batch normalization
     - do running mean normalization
-    - instead of epsilon decay, split into evaluation and exploration phases (eg. evaluate for 1 episode every 50
-    episodes?)
+    - scale=1 for OUNoise
 
 """
 
@@ -69,7 +70,6 @@ logger.addHandler(handler)
 # ---------------------------------------------------------------------------------------------------
 #  Internal Dependencies
 # ---------------------------------------------------------------------------------------------------
-
 from rl_library.agents.ddpg_agent import DDPGAgent
 from rl_library.agents.models.bodies import SimpleNeuralNetBody
 from rl_library.agents.models.heads import SimpleNeuralNetHead, DeepNeuralNetHeadCritic
@@ -85,10 +85,10 @@ config = dict(
     env_name="Reacher 2",
     n_episodes=200,
     length_episode=1500,
-    save_every=10,
+    save_every=50,
     save_path=save_path,
     mode="train",  # "train" or "test"
-    evaluate_every=1,                   # Number of training episodes before 1 evaluation episode
+    evaluate_every=10,                   # Number of training episodes before 1 evaluation episode
     eps_decay=0.99,                      # Epsilon decay rate
 
     # Agent Parameters

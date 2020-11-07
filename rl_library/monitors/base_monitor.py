@@ -3,6 +3,8 @@
  From Global Advanced Analytics and Artificial Intelligence
 """
 from collections import deque
+from copy import copy
+
 import logging
 import numpy as np
 import pandas as pd
@@ -19,12 +21,6 @@ class Monitor:
         self.env_name = config["env_name"]
         self.env = None
 
-        # Epsilon Parameter for balancing Exploration and exploitation
-        self.eps_start = 1.0
-        self.eps_end = 0.01
-        self.eps_decay = 0.995
-        # If evaluate_every is not None, then the balancing Exploration and exploitation
-        self.evaluate_every = config.get("evaluate_every")
 
         self.threshold = config.get("threshold")
         self.agent_losses = []
@@ -37,7 +33,30 @@ class Monitor:
         self.save_path = config.get('save_path')
         self.render = config.get("render", False)
 
+        if self.mode != "train":
+            self.eps_start = 0
+            self.eps_decay = 0
+            self.eps_end = 0
+        else:
+            # Epsilon Parameter for balancing Exploration and exploitation
+            self.eps_start = 1.0
+            self.eps_end = 0.01
+            self.eps_decay = 0.995
+        # If evaluate_every is not None, then the balancing Exploration and exploitation
+        self.evaluate_every = config.get("evaluate_every")
+
+
     def reset(self):
+        state = self.reset_env()
+        last_actions = deque(maxlen=100)
+        last_states = deque(maxlen=100)
+        score = 0
+        actions = []
+        rewards = []
+        states = [state]
+        return state, states, rewards, actions, score, last_states, last_actions
+
+    def reset_env(self):
         raise NotImplementedError
 
     def env_step(self, action):
@@ -56,22 +75,22 @@ class Monitor:
             logger.info(f"Reloading session from {self.reload_path}")
             with open(self.reload_path + "/scores.pickle", "rb") as f:
                 scores = pickle.load(f)
-        if self.mode != "train":
-            self.eps_start = 0
-            self.eps_decay = 0
-            self.eps_end = 0
 
         scores_window = deque(maxlen=100)  # last 100 scores
+        evaluation_scores = []
         eps = self.eps_start  # initialize epsilon
+        eps_backup = eps
         t = None
         for i_episode in range(1, self.n_episodes + 1):
-            state = self.reset()
-            last_actions = deque(maxlen=100)
-            last_states = deque(maxlen=100)
-            score = 0
-            actions = []
-            rewards = []
-            states = [state]
+            state, states, rewards, actions, score, last_states, last_actions = self.reset()
+
+            # Turn ON Evaluation Episode
+            if self.evaluate_every is not None and i_episode % self.evaluate_every == 0:
+                logger.warning("Evaluation episode ACTIVATED")
+                eps_backup = copy(eps)
+                eps = 0
+                agent.enable_evaluation_mode()
+
             for t in range(int(self.length_episode)):
                 action = agent.act(state, eps=eps)
 
@@ -106,17 +125,25 @@ class Monitor:
                 if done:
                     break
 
-            if self.mode == "train" and not agent.step_every_action:
-                agent.step(states, actions, rewards)
+            # Turn OFF
+            if self.evaluate_every is not None and i_episode % self.evaluate_every == 0:
+                evaluation_scores.append(score)  # save most recent score
+                logger.warning(f"Average Evaluation Score: {np.mean(evaluation_scores):.2f}, Last Score: {score}")
+                agent.disable_evaluation_mode()
+                eps = eps_backup
+                logger.warning("Evaluation episode DEACTIVATED")
+            else:
+                if self.mode == "train" and not agent.step_every_action:
+                    agent.step(states, actions, rewards)
 
             scores_window.append(score)  # save most recent score
             scores.append(score)  # save most recent score
             eps = max(self.eps_end, self.eps_decay * eps)  # decrease epsilon
             solved = self.logging(i_episode, scores_window, score, eps, solved, agent, t)
 
-            self.intermediate_save( i_episode, scores, agent, save_prefix)
+            self.intermediate_save( i_episode, scores, agent, save_prefix, evaluation_scores)
 
-        self.save_and_plot(scores, agent, save_prefix)
+        self.save_and_plot(scores, agent, save_prefix, evaluation_scores)
 
         te = pd.Timestamp.utcnow()
         logger.info(f"Elapsed Time: {pd.Timedelta(te - ts)}")
@@ -128,7 +155,7 @@ class Monitor:
         if len(self.agent_losses) < 100:
             mean_loss = np.mean(np.array(self.agent_losses[:len(self.agent_losses)]), axis=0)
         else:
-            mean_loss = np.mean(np.array(self.agent_losses[:-100]), axis=1)
+            mean_loss = np.mean(np.array(self.agent_losses[:-100]), axis=0)
 
         log = f'Episode {i_episode}    Average Score: {np.mean(scores_window):.2f}, Agent Loss: ' \
               f'{mean_loss}, Last Score: {score:.2f} ' \
@@ -146,7 +173,7 @@ class Monitor:
             solved = True
         return solved
 
-    def intermediate_save(self, i_episode, scores, agent, save_prefix):
+    def intermediate_save(self, i_episode, scores, agent, save_prefix, evaluation_scores):
         if self.save_every and self.mode == "train" and self.save_path and i_episode % self.save_every == 0:
             logger.info(f'Saving model to {self.save_path}')
             if not os.path.exists(self.save_path):
@@ -156,10 +183,11 @@ class Monitor:
                 pickle.dump(scores, f)
             if not self.render:
                 plot_scores(scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix)
+                plot_scores(evaluation_scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix + '_evaluation')
                 plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss')
 
 
-    def save_and_plot(self, scores, agent, save_prefix):
+    def save_and_plot(self, scores, agent, save_prefix, evaluation_scores):
         if self.save_path and self.mode == "train":
             if not os.path.exists(self.save_path):
                 os.makedirs(self.save_path, exist_ok=True)
@@ -168,6 +196,8 @@ class Monitor:
                 pickle.dump(scores, f)
             if not self.render:
                 plot_scores(scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix)
+                plot_scores(evaluation_scores, path=self.save_path, threshold=self.threshold,
+                            prefix=save_prefix + '_evaluation')
                 plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss')
         elif self.mode == "test":
             plot_scores(scores, path=".", threshold=self.threshold, prefix=save_prefix)
