@@ -3,7 +3,7 @@ import random
 from collections import namedtuple, deque, OrderedDict
 import logging
 
-logger = logging.getLogger('rllib')
+logger = logging.getLogger('rllib.base-agent')
 
 class BaseAgent:
     """Interacts with and learns from the environment."""

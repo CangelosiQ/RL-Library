@@ -13,6 +13,18 @@ Notes:
     is important. Present actions even more than future because the best time to follow the ball is always NOW. Of
     course when the agent is far away it needs to know which suite of actions will get him back to the ball direction.
 
+TODO:
+    DONE - Proper Book-Keeeping
+    DONE - Raise number of episode to 2000 to approximately match the DDPG 2.5 million steps in the results table
+    DONE - split agent scores between actor and critic to follow better what is hapening there
+    - Double DDDPG? Rainbow DDPG?
+    - Try even more extreme Discount factor
+    - change noise (try random noise, adaptive noise)
+    - disable batch normalization
+    - do running mean normalization
+    - instead of epsilon decay, split into evaluation and exploration phases (eg. evaluate for 1 episode every 50
+    episodes?)
+
 """
 
 # ---------------------------------------------------------------------------------------------------
@@ -28,6 +40,8 @@ import logging
 import os
 import pandas as pd
 from pathlib import Path
+import torch
+import json
 import torch.nn.functional as F
 
 # ---------------------------------------------------------------------------------------------------
@@ -42,27 +56,60 @@ from rl_library.monitors.unity_monitor import UnityMonitor
 # ---------------------------------------------------------------------------------------------------
 #  Inputs
 # ---------------------------------------------------------------------------------------------------
-hidden_layer_sizes = [20, 15, 8]
+config = dict(
+    # Environment parameters
+    env_name="Reacher 2",
+    n_episodes=200,
+    length_episode=1500,
+
+    # Agent Parameters
+    agent="DDPG",
+    hidden_layers_actor=(40, 30,),          #
+    hidden_layers_critic_body=(40, 30,),    #
+    hidden_layers_critic_head=(30, 15),    #
+    func_critic_body="F.relu",          #
+    func_critic_head="F.relu",          #
+    func_actor_body="F.relu",           #
+    TAU=1e-3,                           # for soft update of target parameters
+    BUFFER_SIZE=int(1e6),               # replay buffer size
+    BATCH_SIZE=64,                      # minibatch size
+    GAMMA=0.99,                          # discount factor
+    LR_ACTOR=5e-4,                      # learning rate of the actor
+    LR_CRITIC=1e-3,                     # learning rate of the critic
+    WEIGHT_DECAY=0.01,                  # L2 weight decay
+    UPDATE_EVERY=1,                     # Number of actions before making a learning step
+    action_noise="OU",                  #
+    weights_noise=None,                 #
+    batch_normalization=None,           #
+    warmup=1e4,                           # Number of random actions to start with as a warm-up
+    eps_decay=0.99,                      # Epsilon decay rate
+
+    save_path=f"DDPG_{pd.Timestamp.utcnow().value}",
+)
+
 mode = "train"  # "train" or "test"
 path = Path(__file__).parent
-save_path = f"DDPG_" + "_".join([str(sz) for sz in hidden_layer_sizes])
-os.makedirs(save_path, exist_ok=True)
+os.makedirs(config["save_path"], exist_ok=True)
 
 # ---------------------------------------------------------------------------------------------------
 #  Logger
 # ---------------------------------------------------------------------------------------------------
-logger = logging.getLogger()
-handler = logging.FileHandler(f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log")
+logger = logging.getLogger("rllib")
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
+
+handler = logging.FileHandler(f"{config['save_path']}/logs_navigation_{pd.Timestamp.utcnow().value}.log")
+handler.setFormatter(formatter)
 stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(formatter)
+
 logger.addHandler(handler)
 logger.addHandler(stream_handler)
-
 # ------------------------------------------------------------
 #  1. Initialization
 # ------------------------------------------------------------
 # 1. Start the Environment
-env_name = "Reacher 2"
-env = UnityEnvironment(file_name=f'./{env_name}.app')
+
+env = UnityEnvironment(file_name=f'./{config["env_name"]}.app')
 
 # get the default brain
 brain_name = env.brain_names[0]
@@ -84,53 +131,59 @@ states = env_info.vector_observations
 state_size = states.shape[1]
 print('There are {} agents. Each observes a state with length: {}'.format(states.shape[0], state_size))
 print('The state for the first agent looks like:', states[0])
-
+config.update(dict(action_size=action_size, state_size=state_size))
 
 # ------------------------------------------------------------
 #  2. Training
 # ------------------------------------------------------------
 if mode == "train":
     # Actor model
-    actor = SimpleNeuralNetHead(action_size, SimpleNeuralNetBody(state_size, (100,)),
-                                func=F.tanh)
+    actor = SimpleNeuralNetHead(action_size, SimpleNeuralNetBody(state_size, config["hidden_layers_actor"]),
+                                func=torch.tanh)
     # Critic model
-    critic = DeepNeuralNetHeadCritic(action_size, SimpleNeuralNetBody(state_size, (100,),
-                                                                      func=F.relu),
-                                     hidden_layers_sizes=(50,),
-                                     func=F.relu,
+    critic = DeepNeuralNetHeadCritic(action_size, SimpleNeuralNetBody(state_size, config["hidden_layers_critic_body"],
+                                                                      func=eval(config["func_critic_body"])),
+                                     hidden_layers_sizes=config["hidden_layers_critic_head"],
+                                     func=eval(config["func_critic_head"]),
                                      end_func=None)
 
     # DDPG Agent
     agent = DDPGAgent(state_size=state_size, action_size=action_size,
-                      model_actor=actor, model_critic=critic, action_space_low=[-1, ] * action_size, action_space_high=
-                      [1, ] * action_size, config={"warmup": 1e4},
-                      hyper_parameters=dict(TAU=1e-3,  # for soft update of target parameters
-                                            BUFFER_SIZE=int(1e5),  # replay buffer size
-                                            BATCH_SIZE=128,  # minibatch size
-                                            GAMMA=0.6,  # discount factor
-                                            LR_ACTOR=1e-3,  # learning rate of the actor
-                                            LR_CRITIC=1e-3,  # learning rate of the critic
-                                            WEIGHT_DECAY=0.001,  # L2 weight decay
-                                            UPDATE_EVERY=1,
-                                            ))
+                      model_actor=actor, model_critic=critic,
+                      action_space_low=[-1, ] * action_size, action_space_high=[1, ] * action_size,
+                      config={"warmup": config["warmup"], "action_noise": config["action_noise"]},
+                      hyper_parameters=config)
 
     # Unity Monitor
-    monitor = UnityMonitor(env_name=env_name, env=env)
-    monitor.eps_decay = 0.99  # Epsilon decay rate
+    monitor = UnityMonitor(env_name=config["env_name"], env=env)
+    monitor.eps_decay = config["eps_decay"]
 
     # Training
-    scores = monitor.run(agent, n_episodes=200, length_episode=1000, mode="train",
-                         reload_path=None, save_every=100,
-                         save_path=save_path)
+    start = pd.Timestamp.utcnow()
+    scores = monitor.run(agent, n_episodes=config["n_episodes"], length_episode=config["length_episode"], mode="train",
+                         reload_path=None, save_every=50,
+                         save_path=config['save_path'])
     logger.info("Average Score last 100 episodes: {}".format(np.mean(scores[-100:])))
-
+    elapsed_time = pd.Timedelta(pd.Timestamp.utcnow()-start).total_seconds()
+    logger.info(f"Elapsed Time: {elapsed_time} seconds")
+    config["training_time"] = elapsed_time
+    config["training_scores"] = scores
+    config["best_training_score"] = max(scores)
+    config["avg_training_score"] = np.mean(scores)
+    config["last_50_score"] = np.mean(scores[:-50])
 # ------------------------------------------------------------
 #  3. Testing
 # ------------------------------------------------------------
 else:
-    agent = DDPGAgent.load(filepath=save_path, mode="test")
+    agent = DDPGAgent.load(filepath=config['save_path'], mode="test")
     scores = unity_monitor.run(env, agent, brain_name, n_episodes=10, length_episode=1e6, mode="test")
     logger.info(f"Test Score over {len(scores)} episodes: {np.mean(scores)}")
+    config["test_scores"] = scores
+    config["best_test_score"] = max(scores)
+    config["avg_test_score"] = np.mean(scores)
+
+with open(f"./{config['save_path']}/config.json", "w") as f:
+    json.dump(config, f)
 
 # When finished, you can close the environment.
 logger.info("Closing...")

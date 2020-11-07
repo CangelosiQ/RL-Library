@@ -10,7 +10,7 @@ import os, pickle
 
 from rl_library.utils.visualization import plot_scores
 
-logger = logging.getLogger("rllib.gym-monitor")
+logger = logging.getLogger("rllib.monitor")
 
 
 class Monitor:
@@ -61,7 +61,7 @@ class Monitor:
             rewards = []
             states = [state]
             for t in range(int(length_episode)):
-                action = agent.act(state, eps=eps, add_noise=True)
+                action = agent.act(state, eps=eps)
 
                 # print(f"\rAction: {action} Processed: {self.process_action(action)}", end="")
                 next_state, reward, done, _ = self.env_step(self.process_action(action))  # send the action to the
@@ -82,6 +82,7 @@ class Monitor:
 
                 if mode == "train" and agent.step_every_action:
                     agent.step(state, action, reward, next_state, done)
+
                 # We are going to update the agent only after the end of the episode
                 elif mode == "train":
                     actions.append(action)
@@ -110,17 +111,23 @@ class Monitor:
         return scores
 
     def logging(self, i_episode, scores_window, score, eps, mode, solved, agent, n_steps):
-        self.agent_losses.append(float(agent.avg_loss))
-        mean_loss = np.mean(self.agent_losses[:-min(len(self.agent_losses), 100)])
+        self.agent_losses.append(agent.avg_loss)
+
+        if len(self.agent_losses) < 100:
+            mean_loss = np.mean(np.array(self.agent_losses[:len(self.agent_losses)]), axis=0)
+        else:
+            mean_loss = np.mean(np.array(self.agent_losses[:-100]), axis=1)
+
         log = f'\rEpisode {i_episode}\tAverage Score: {np.mean(scores_window):.2f}, Agent Loss: '\
-              f'{mean_loss:.2e}, Last Score: {score:.2f} '\
+              f'{mean_loss}, Last Score: {score:.2f} '\
               f'({n_steps} '\
               f'steps), '\
               f'eps: {eps:.2f}'
-        print(log, end="")
-        logger.debug(log)
-        if i_episode % 100 == 0:
+
+        if i_episode % 1 == 0:
             logger.info(log)
+        else:
+            logger.debug(log)
 
         if self.threshold and np.mean(scores_window) >= self.threshold and mode == "train" and not solved:
             logger.warning(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score:'

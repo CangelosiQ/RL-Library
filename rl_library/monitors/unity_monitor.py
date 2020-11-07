@@ -1,28 +1,12 @@
-import pickle
-from collections import deque
-import numpy as np
-import os
-import logging
-logger = logging.getLogger()
-import pandas as pd
-from rl_library.utils.visualization import plot_scores
-
 """
  Created by quentincangelosi at 17.10.20
  From Global Advanced Analytics and Artificial Intelligence
 """
-from collections import deque
-import gym
 import logging
-from gym.spaces import Discrete, Box
-import numpy as np
-import pandas as pd
-import os, pickle
 
 from rl_library.monitors.base_monitor import Monitor
-from rl_library.utils.visualization import plot_scores
 
-logger = logging.getLogger("rllib.gym-monitor")
+logger = logging.getLogger("rllib.unity-monitor")
 
 
 class UnityMonitor(Monitor):

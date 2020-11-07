@@ -19,8 +19,10 @@ logger = logging.getLogger("rllib.ddpgagent")
 class DDPGAgent(BaseAgent):
     """Interacts with and learns from the environment."""
 
-    def __init__(self, model_actor: nn.Module, model_critic: nn.Module, action_space_high, action_space_low,
-                 hyper_parameters: dict, **kwargs):
+    def __init__(self, state_size, action_size, config: dict,
+                 model_actor: nn.Module, model_critic: nn.Module,
+                 action_space_high, action_space_low,
+                 hyper_parameters: dict):
         """Initialize an Agent object.
         
         Params
@@ -29,7 +31,7 @@ class DDPGAgent(BaseAgent):
             action_size (int): dimension of each action
             random_seed (int): random seed
         """
-        super().__init__(**kwargs)
+        super().__init__(state_size, action_size, config)
 
         self.BUFFER_SIZE = hyper_parameters.get("BUFFER_SIZE", int(1e5))  # replay buffer size
         self.BATCH_SIZE = hyper_parameters.get("BATCH_SIZE", 128)  # minibatch size
@@ -52,12 +54,30 @@ class DDPGAgent(BaseAgent):
                                            weight_decay=self.WEIGHT_DECAY)
 
         # Noise process
-        self.noise = OUNoise(self.action_size, self.random_seed)
-        self.parameter_noise = [OUNoise(l.weight.data.size(), self.random_seed) for l in self.actor_local.body.layers]
+        if "action_noise" in config:
+            if config["action_noise"] == "OU":
+                self.action_noise = OUNoise(self.action_size, self.random_seed)
+            else:
+                logger.warning(f"action_noise {config['action_noise']} not understood.")
+                self.action_noise = None
+        else:
+            self.action_noise = None
+
+        if "parameter_noise" in config:
+            if config["parameter_noise"] == "OU":
+                self.parameter_noise = [OUNoise(l.weight.data.size(), self.random_seed) for l in self.actor_local.body.layers]
+            else:
+                logger.warning(f"action_noise {config['action_noise']} not understood.")
+                self.parameter_noise = None
+        else:
+            self.parameter_noise = None
+
         # Replay memory
         self.memory = ReplayBuffer(self.action_size, self.BUFFER_SIZE, self.BATCH_SIZE, self.random_seed)
         self.action_space_low = action_space_low
         self.action_space_high = action_space_high
+
+        self.avg_loss = [0, 0]  # actor, critic
 
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
@@ -71,7 +91,7 @@ class DDPGAgent(BaseAgent):
             # Learn, if enough samples are available in memory
             if len(self.memory) > self.BATCH_SIZE:
                 experiences = self.memory.sample()
-                experiences = self.batch_normalization(experiences)
+                # experiences = self.batch_normalization(experiences)
                 self.learn(experiences, self.GAMMA)
         elif self.warmup > 0:
             self.warmup -= 1
@@ -91,7 +111,7 @@ class DDPGAgent(BaseAgent):
 
         return (states, actions, rewards, next_states, dones)
 
-    def act(self, state, add_noise=True, eps: float = 1, **kwargs):
+    def act(self, state, eps: float = 1):
         """Returns actions for given state as per current policy."""
         if self.warmup > 0:
             # Random action
@@ -101,31 +121,31 @@ class DDPGAgent(BaseAgent):
 
         self.actor_local.eval()
         with torch.no_grad():
-            if add_noise and self.t_step == 0:
-                previous_weights = {}
-                for l, noise in zip(self.actor_local.body.layers, self.parameter_noise):
-                    #         # print(f"before {np.mean(l.weight.data.numpy())}")
-                    if random.random() < eps:  # Only affect some layers at a time
-                        # l.weight.data += eps/10 * (torch.tensor(np.random.random(l.weight.data.size())-0.5))
-                        # std = max(min(np.std(l.weight.data.numpy()), 1), 0.1)
-                        # random_noise = eps * (torch.tensor((np.random.random(l.weight.data.numpy().shape)-0.5)*std))
-                        random_noise = eps * (torch.tensor(noise.sample()))
-                        # print(f"l.weight.data: {l.weight.data}")
-                        # print(f"Noise: {random_noise}")
-                        previous_weights[l] = copy.deepcopy(l.weight.data)
-                        l.weight.data += random_noise
+            # if add_noise and self.t_step == 0:
+            #     previous_weights = {}
+            #     for l, noise in zip(self.actor_local.body.layers, self.parameter_noise):
+            #         #         # print(f"before {np.mean(l.weight.data.numpy())}")
+            #         if random.random() < eps:  # Only affect some layers at a time
+            #             # l.weight.data += eps/10 * (torch.tensor(np.random.random(l.weight.data.size())-0.5))
+            #             # std = max(min(np.std(l.weight.data.numpy()), 1), 0.1)
+            #             # random_noise = eps * (torch.tensor((np.random.random(l.weight.data.numpy().shape)-0.5)*std))
+            #             random_noise = eps * (torch.tensor(noise.sample()))
+            #             # print(f"l.weight.data: {l.weight.data}")
+            #             # print(f"Noise: {random_noise}")
+            #             previous_weights[l] = copy.deepcopy(l.weight.data)
+            #             l.weight.data += random_noise
 
                     # print(f"after {np.mean(l.weight.data.numpy())}")
             action = self.actor_local(state).cpu().data.numpy()
-            if add_noise and self.t_step == 0:
-                for l, noise in zip(self.actor_local.body.layers, self.parameter_noise):
-                    if l in previous_weights:
-                        l.weight.data = previous_weights[l]
+            # if add_noise and self.t_step == 0:
+            #     for l, noise in zip(self.actor_local.body.layers, self.parameter_noise):
+            #         if l in previous_weights:
+            #             l.weight.data = previous_weights[l]
 
         # logger.debug(f"State= {state}, Action={action}")
         self.actor_local.train()
-        if add_noise:
-            noise = self.noise.sample()
+        if self.action_noise is not None:
+            noise = self.action_noise.sample()
             # noise = np.random.random(action.shape)
             # action += eps*(2*noise-1)
             action += eps * noise
@@ -163,7 +183,7 @@ class DDPGAgent(BaseAgent):
         # Minimize the loss
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
+        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 5)
         self.critic_optimizer.step()
 
         # ---------------------------- update actor ---------------------------- #
@@ -174,7 +194,7 @@ class DDPGAgent(BaseAgent):
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
-        self.avg_loss = actor_loss + critic_loss
+        self.avg_loss = [float(actor_loss), float(critic_loss)]
         # ----------------------- update target networks ----------------------- #
         self.soft_update(self.critic_local, self.critic_target, self.TAU)
         self.soft_update(self.actor_local, self.actor_target, self.TAU)
