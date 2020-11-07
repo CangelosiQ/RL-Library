@@ -12,7 +12,7 @@ log_fn = f"../../logs/logs_{__file__.split('/')[-1].replace('.py', '')}_{pd.Time
 logging.basicConfig(filename=log_fn,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.DEBUG)
-logger = logging.getLogger()
+logger = logging.getLogger("rllib")
 
 from rl_library.agents.ddpg_agent import DDPGAgent
 from rl_library.agents.models.bodies import SimpleNeuralNetBody

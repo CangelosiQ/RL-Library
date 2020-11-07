@@ -11,8 +11,8 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 def plot_scores(scores, rolling_window=100, path: str = '.', threshold=None, prefix=""):
     """Plot scores and optional rolling mean using specified window."""
     plt.figure(figsize=(15, 8))
-    if len(scores[0])>1:
-        scores = np.aray(scores)
+    if type(scores[0]) not in [float, int,] and len(scores[0]) > 1:
+        scores = np.array(scores)
         nr, nc = scores.shape
         for d in range(scores.shape[1]):
             plt.subplot(nc, 1, d+1)

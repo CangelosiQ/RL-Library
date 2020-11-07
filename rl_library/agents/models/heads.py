@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import logging
 import numpy as np
 
-logger = logging.getLogger("rllib")
+logger = logging.getLogger("rllib.models")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 

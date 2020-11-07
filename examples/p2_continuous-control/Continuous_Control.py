@@ -42,16 +42,40 @@ import pandas as pd
 from pathlib import Path
 import torch
 import json
+import sys
 import torch.nn.functional as F
+
+# ---------------------------------------------------------------------------------------------------
+#  Logger
+# ---------------------------------------------------------------------------------------------------
+path = Path(__file__).parent
+save_path = f"DDPG_{pd.Timestamp.utcnow().value}"
+os.makedirs(save_path, exist_ok=True)
+
+# logging.basicConfig(filename=f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log",
+#                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#                     level=logging.INFO)
+logger = logging.getLogger()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
+
+handler = logging.FileHandler(f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log")
+handler.setFormatter(formatter)
+# stream_handler = logging.StreamHandler()
+# stream_handler.setFormatter(formatter)
+
+# logger.addHandler(stream_handler)
+logger.addHandler(handler)
 
 # ---------------------------------------------------------------------------------------------------
 #  Internal Dependencies
 # ---------------------------------------------------------------------------------------------------
+
 from rl_library.agents.ddpg_agent import DDPGAgent
 from rl_library.agents.models.bodies import SimpleNeuralNetBody
 from rl_library.agents.models.heads import SimpleNeuralNetHead, DeepNeuralNetHeadCritic
 from rl_library.monitors import unity_monitor
 from rl_library.monitors.unity_monitor import UnityMonitor
+
 
 # ---------------------------------------------------------------------------------------------------
 #  Inputs
@@ -61,6 +85,11 @@ config = dict(
     env_name="Reacher 2",
     n_episodes=200,
     length_episode=1500,
+    save_every=10,
+    save_path=save_path,
+    mode="train",  # "train" or "test"
+    evaluate_every=1,                   # Number of training episodes before 1 evaluation episode
+    eps_decay=0.99,                      # Epsilon decay rate
 
     # Agent Parameters
     agent="DDPG",
@@ -82,28 +111,9 @@ config = dict(
     weights_noise=None,                 #
     batch_normalization=None,           #
     warmup=1e4,                           # Number of random actions to start with as a warm-up
-    eps_decay=0.99,                      # Epsilon decay rate
-
-    save_path=f"DDPG_{pd.Timestamp.utcnow().value}",
+    start_time=pd.Timestamp.utcnow()
 )
 
-mode = "train"  # "train" or "test"
-path = Path(__file__).parent
-os.makedirs(config["save_path"], exist_ok=True)
-
-# ---------------------------------------------------------------------------------------------------
-#  Logger
-# ---------------------------------------------------------------------------------------------------
-logger = logging.getLogger("rllib")
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
-
-handler = logging.FileHandler(f"{config['save_path']}/logs_navigation_{pd.Timestamp.utcnow().value}.log")
-handler.setFormatter(formatter)
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(formatter)
-
-logger.addHandler(handler)
-logger.addHandler(stream_handler)
 # ------------------------------------------------------------
 #  1. Initialization
 # ------------------------------------------------------------
@@ -136,7 +146,7 @@ config.update(dict(action_size=action_size, state_size=state_size))
 # ------------------------------------------------------------
 #  2. Training
 # ------------------------------------------------------------
-if mode == "train":
+if config["mode"] == "train":
     # Actor model
     actor = SimpleNeuralNetHead(action_size, SimpleNeuralNetBody(state_size, config["hidden_layers_actor"]),
                                 func=torch.tanh)
@@ -155,14 +165,12 @@ if mode == "train":
                       hyper_parameters=config)
 
     # Unity Monitor
-    monitor = UnityMonitor(env_name=config["env_name"], env=env)
+    monitor = UnityMonitor(env=env, config=config)
     monitor.eps_decay = config["eps_decay"]
 
     # Training
     start = pd.Timestamp.utcnow()
-    scores = monitor.run(agent, n_episodes=config["n_episodes"], length_episode=config["length_episode"], mode="train",
-                         reload_path=None, save_every=50,
-                         save_path=config['save_path'])
+    scores = monitor.run(agent)
     logger.info("Average Score last 100 episodes: {}".format(np.mean(scores[-100:])))
     elapsed_time = pd.Timedelta(pd.Timestamp.utcnow()-start).total_seconds()
     logger.info(f"Elapsed Time: {elapsed_time} seconds")

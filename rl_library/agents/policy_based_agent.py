@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import logging
 
-logger = logging.getLogger()
+logger = logging.getLogger("rllib.agent")
 BUFFER_SIZE = int(1e5)  # replay buffer size
 BATCH_SIZE = 64  # minibatch size
 GAMMA = 0.95  # discount factor

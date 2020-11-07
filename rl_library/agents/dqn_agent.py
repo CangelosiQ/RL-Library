@@ -14,7 +14,7 @@ from rl_library.agents.models.bodies import SimpleNeuralNetBody
 from rl_library.agents.models.heads import SimpleNeuralNetHead
 from rl_library.utils.replay_buffers import ReplayBuffer
 
-logger = logging.getLogger()
+logger = logging.getLogger("rllib.agent")
 BUFFER_SIZE = int(1e4)  # replay buffer size
 BATCH_SIZE = 64  # minibatch size
 GAMMA = 0.95  # discount factor

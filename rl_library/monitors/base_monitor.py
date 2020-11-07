@@ -15,14 +15,27 @@ logger = logging.getLogger("rllib.monitor")
 
 class Monitor:
 
-    def __init__(self, env_name, threshold=None):
-        self.env_name = env_name
+    def __init__(self, config: dict):
+        self.env_name = config["env_name"]
         self.env = None
+
+        # Epsilon Parameter for balancing Exploration and exploitation
         self.eps_start = 1.0
         self.eps_end = 0.01
         self.eps_decay = 0.995
-        self.threshold = threshold
+        # If evaluate_every is not None, then the balancing Exploration and exploitation
+        self.evaluate_every = config.get("evaluate_every")
+
+        self.threshold = config.get("threshold")
         self.agent_losses = []
+        self.n_episodes = config.get("n_episodes", 2000)
+        self.length_episode = config.get("length_episode", 500)
+        self.mode = config.get("mode", "train")
+        self.reload_path = config.get("reload_path")
+        self.save_every = config.get("save_every", 50)
+
+        self.save_path = config.get('save_path')
+        self.render = config.get("render", False)
 
     def reset(self):
         raise NotImplementedError
@@ -30,8 +43,7 @@ class Monitor:
     def env_step(self, action):
         raise NotImplementedError
 
-    def run(self, agent, n_episodes=2000, length_episode=500, mode="train", reload_path=None, save_every=500,
-            save_path=None, render=False):
+    def run(self, agent):
         save_prefix = f'{self.env_name}_{agent.__class__.__name__}'
         ts = pd.Timestamp.utcnow()
         # ------------------------------------------------------------
@@ -40,11 +52,11 @@ class Monitor:
         # reset the environment
         scores = []  # list containing scores from each episode
         solved = False
-        if reload_path is not None and os.path.exists(reload_path + "/checkpoint.pth"):
-            logger.info(f"Reloading session from {reload_path}")
-            with open(reload_path + "/scores.pickle", "rb") as f:
+        if self.reload_path is not None and os.path.exists(self.reload_path + "/checkpoint.pth"):
+            logger.info(f"Reloading session from {self.reload_path}")
+            with open(self.reload_path + "/scores.pickle", "rb") as f:
                 scores = pickle.load(f)
-        if mode != "train":
+        if self.mode != "train":
             self.eps_start = 0
             self.eps_decay = 0
             self.eps_end = 0
@@ -52,7 +64,7 @@ class Monitor:
         scores_window = deque(maxlen=100)  # last 100 scores
         eps = self.eps_start  # initialize epsilon
         t = None
-        for i_episode in range(1, n_episodes + 1):
+        for i_episode in range(1, self.n_episodes + 1):
             state = self.reset()
             last_actions = deque(maxlen=100)
             last_states = deque(maxlen=100)
@@ -60,7 +72,7 @@ class Monitor:
             actions = []
             rewards = []
             states = [state]
-            for t in range(int(length_episode)):
+            for t in range(int(self.length_episode)):
                 action = agent.act(state, eps=eps)
 
                 # print(f"\rAction: {action} Processed: {self.process_action(action)}", end="")
@@ -74,17 +86,17 @@ class Monitor:
                 #     if diff < 0.4 and diff_state < 0.2:
                 #         print(f"Episode {i_episode}: AGENT STUCK! diff={diff}, diff_state={diff_state}, {action}")
                 #         reward -= 0.01
-                        # break
+                # break
 
                 # environment
-                if render:
+                if self.render:
                     self.env.render()
 
-                if mode == "train" and agent.step_every_action:
+                if self.mode == "train" and agent.step_every_action:
                     agent.step(state, action, reward, next_state, done)
 
                 # We are going to update the agent only after the end of the episode
-                elif mode == "train":
+                elif self.mode == "train":
                     actions.append(action)
                     states.append(next_state)
                     rewards.append(reward)
@@ -94,23 +106,23 @@ class Monitor:
                 if done:
                     break
 
-            if mode == "train" and not agent.step_every_action:
+            if self.mode == "train" and not agent.step_every_action:
                 agent.step(states, actions, rewards)
 
             scores_window.append(score)  # save most recent score
             scores.append(score)  # save most recent score
             eps = max(self.eps_end, self.eps_decay * eps)  # decrease epsilon
-            solved = self.logging(i_episode, scores_window, score, eps, mode, solved, agent, t)
+            solved = self.logging(i_episode, scores_window, score, eps, solved, agent, t)
 
-            self.intermediate_save(save_every, i_episode, scores, agent, save_path, mode, save_prefix, render)
+            self.intermediate_save( i_episode, scores, agent, save_prefix)
 
-        self.save_and_plot(scores, agent, save_path, mode, save_prefix, render)
+        self.save_and_plot(scores, agent, save_prefix)
 
         te = pd.Timestamp.utcnow()
         logger.info(f"Elapsed Time: {pd.Timedelta(te - ts)}")
         return scores
 
-    def logging(self, i_episode, scores_window, score, eps, mode, solved, agent, n_steps):
+    def logging(self, i_episode, scores_window, score, eps, solved, agent, n_steps):
         self.agent_losses.append(agent.avg_loss)
 
         if len(self.agent_losses) < 100:
@@ -118,46 +130,46 @@ class Monitor:
         else:
             mean_loss = np.mean(np.array(self.agent_losses[:-100]), axis=1)
 
-        log = f'\rEpisode {i_episode}\tAverage Score: {np.mean(scores_window):.2f}, Agent Loss: '\
-              f'{mean_loss}, Last Score: {score:.2f} '\
-              f'({n_steps} '\
-              f'steps), '\
+        log = f'Episode {i_episode}    Average Score: {np.mean(scores_window):.2f}, Agent Loss: ' \
+              f'{mean_loss}, Last Score: {score:.2f} ' \
+              f'({n_steps} ' \
+              f'steps), ' \
               f'eps: {eps:.2f}'
-
         if i_episode % 1 == 0:
             logger.info(log)
         else:
             logger.debug(log)
 
-        if self.threshold and np.mean(scores_window) >= self.threshold and mode == "train" and not solved:
+        if self.threshold and np.mean(scores_window) >= self.threshold and self.mode == "train" and not solved:
             logger.warning(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score:'
                            f' {np.mean(scores_window):.2f}')
             solved = True
         return solved
 
-    def intermediate_save(self, save_every, i_episode, scores, agent, save_path, mode, save_prefix, render):
-        if save_every and mode == "train" and save_path and i_episode % save_every == 0:
-            logger.info(f'\nSaving model to {save_path}')
-            if not os.path.exists(save_path):
-                os.makedirs(save_path, exist_ok=True)
-            agent.save(filepath=save_path)
-            with open(save_path + "/scores.pickle", "wb") as f:
+    def intermediate_save(self, i_episode, scores, agent, save_prefix):
+        if self.save_every and self.mode == "train" and self.save_path and i_episode % self.save_every == 0:
+            logger.info(f'Saving model to {self.save_path}')
+            if not os.path.exists(self.save_path):
+                os.makedirs(self.save_path, exist_ok=True)
+            agent.save(filepath=self.save_path)
+            with open(self.save_path + "/scores.pickle", "wb") as f:
                 pickle.dump(scores, f)
-            if not render:
-                plot_scores(scores, path=save_path, threshold=self.threshold, prefix=save_prefix)
-                plot_scores(self.agent_losses, path=save_path, prefix=save_prefix + '_agent_loss')
+            if not self.render:
+                plot_scores(scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix)
+                plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss')
 
-    def save_and_plot(self, scores, agent, save_path, mode, save_prefix, render):
-        if save_path and mode == "train":
-            if not os.path.exists(save_path):
-                os.makedirs(save_path, exist_ok=True)
-            agent.save(filepath=save_path)
-            with open(save_path + "/scores.pickle", "wb") as f:
+
+    def save_and_plot(self, scores, agent, save_prefix):
+        if self.save_path and self.mode == "train":
+            if not os.path.exists(self.save_path):
+                os.makedirs(self.save_path, exist_ok=True)
+            agent.save(filepath=self.save_path)
+            with open(self.save_path + "/scores.pickle", "wb") as f:
                 pickle.dump(scores, f)
-            if not render:
-                plot_scores(scores, path=save_path, threshold=self.threshold, prefix=save_prefix)
-                plot_scores(self.agent_losses, path=save_path, prefix=save_prefix+'_agent_loss')
-        elif mode == "test":
+            if not self.render:
+                plot_scores(scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix)
+                plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss')
+        elif self.mode == "test":
             plot_scores(scores, path=".", threshold=self.threshold, prefix=save_prefix)
 
     def play(self, agent):
