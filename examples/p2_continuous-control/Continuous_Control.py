@@ -135,7 +135,8 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # ------------------------------------------------------------
     # 1. Start the Environment
 
-    env = UnityEnvironment(file_name=f'./{config["env_name"]}.app')
+    env = UnityEnvironment(file_name=f'./Reacher_Linux/Reacher.x86_64')  # Linux
+    #env = UnityEnvironment(file_name=f'./{config["save_path"]}')  # mac OS
 
     # get the default brain
     brain_name = env.brain_names[0]
@@ -219,7 +220,7 @@ if __name__ == "__main__":
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     skip_first = 0
-    for batch_size in [128]:
+    for batch_size in [256]:
         for weight_decay in [ 0.01, 0.0001, ]:
             for discount_factor in [ 0.9, 0.7, 0.8,]:
                 if skip_first > 0:
