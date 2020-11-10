@@ -2,6 +2,7 @@
  Created by quentincangelosi at 03.11.20
  From Global Advanced Analytics and Artificial Intelligence
 """
+import json
 from collections import deque
 from copy import copy
 
@@ -18,6 +19,7 @@ logger = logging.getLogger("rllib.monitor")
 class Monitor:
 
     def __init__(self, config: dict):
+        self.config = config
         self.env_name = config["env_name"]
         self.env = None
         self.seed = config.get("random_seed", 42)
@@ -162,10 +164,11 @@ class Monitor:
               f'({n_steps} ' \
               f'steps), ' \
               f'eps: {eps:.2f}'
-        if i_episode % 1 == 0:
+        if i_episode % 25 == 0:
             logger.info(log)
+            logger.info(str(agent))
         else:
-            logger.debug(log)
+            logger.info(log)
 
         if self.threshold and np.mean(scores_window) >= self.threshold and self.mode == "train" and not solved:
             logger.warning(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score:'
@@ -186,6 +189,19 @@ class Monitor:
                 plot_scores(evaluation_scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix + '_evaluation')
                 plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss', log=True)
 
+            # Save config
+            self.save_config(scores, i_episode)
+
+    def save_config(self, scores, i_episode=None):
+        self.config["current_episode"] = i_episode
+        self.config["training_scores"] = scores
+        self.config["best_training_score"] = max(scores)
+        self.config["avg_training_score"] = np.mean(scores)
+        if len(scores) > 50:
+            self.config["last_50_score"] = np.mean(scores[:-50])
+
+        with open(f"./{self.config['save_path']}/config.json", "w") as f:
+            json.dump(self.config, f)
 
     def save_and_plot(self, scores, agent, save_prefix, evaluation_scores):
         if self.save_path and self.mode == "train":
@@ -199,8 +215,11 @@ class Monitor:
                 plot_scores(evaluation_scores, path=self.save_path, threshold=self.threshold,
                             prefix=save_prefix + '_evaluation')
                 plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss', log=True)
+            # Save config
+            self.save_config(scores)
         elif self.mode == "test":
             plot_scores(scores, path=".", threshold=self.threshold, prefix=save_prefix)
+
 
     def play(self, agent):
         state = self.reset()

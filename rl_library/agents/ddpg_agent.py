@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
+from torch.optim import lr_scheduler
 import logging
 
 from rl_library.agents.base_agent import BaseAgent
@@ -21,8 +22,7 @@ class DDPGAgent(BaseAgent):
 
     def __init__(self, state_size, action_size, config: dict,
                  model_actor: nn.Module, model_critic: nn.Module,
-                 action_space_high, action_space_low,
-                 hyper_parameters: dict):
+                 action_space_high, action_space_low):
         """Initialize an Agent object.
         
         Params
@@ -33,25 +33,27 @@ class DDPGAgent(BaseAgent):
         """
         super().__init__(state_size, action_size, config)
 
-        self.BUFFER_SIZE = hyper_parameters.get("BUFFER_SIZE", int(1e5))  # replay buffer size
-        self.BATCH_SIZE = hyper_parameters.get("BATCH_SIZE", 128)  # minibatch size
-        self.GAMMA = hyper_parameters.get("GAMMA", 0.99)  # discount factor
-        self.TAU = hyper_parameters.get("TAU", 1e-3)  # for soft update of target parameters
-        self.LR_ACTOR = hyper_parameters.get("LR_ACTOR", 1e-3)  # learning rate of the actor
-        self.LR_CRITIC = hyper_parameters.get("LR_CRITIC", 1e-3)  # learning rate of the critic
-        self.WEIGHT_DECAY = hyper_parameters.get("WEIGHT_DECAY", 0.001)  # L2 weight decay
-        self.UPDATE_EVERY = hyper_parameters.get("UPDATE_EVERY", 1)
+        self.BUFFER_SIZE = config.get("BUFFER_SIZE", int(1e5))  # replay buffer size
+        self.BATCH_SIZE = config.get("BATCH_SIZE", 128)  # minibatch size
+        self.GAMMA = config.get("GAMMA", 0.99)  # discount factor
+        self.TAU = config.get("TAU", 1e-3)  # for soft update of target parameters
+        self.LR_ACTOR = config.get("LR_ACTOR", 1e-3)  # learning rate of the actor
+        self.LR_CRITIC = config.get("LR_CRITIC", 1e-3)  # learning rate of the critic
+        self.WEIGHT_DECAY = config.get("WEIGHT_DECAY", 0.001)  # L2 weight decay
+        self.UPDATE_EVERY = config.get("UPDATE_EVERY", 1)
 
         # Actor Network (w/ Target Network)
         self.actor_local = model_actor.to(device)
         self.actor_target = copy.deepcopy(model_actor).to(device)
-        self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=self.LR_ACTOR)
 
         # Critic Network (w/ Target Network)
         self.critic_local = model_critic.to(device)
         self.critic_target = copy.deepcopy(model_critic).to(device)
-        self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.LR_CRITIC,
-                                           weight_decay=self.WEIGHT_DECAY)
+
+        self.set_optimizer(config.get("optimizer", "adam"))
+
+        if config.get('lr_scheduler'):
+            self.set_scheduler(**config.get('lr_scheduler'))
 
         # Noise process
         if "action_noise" in config:
@@ -65,7 +67,8 @@ class DDPGAgent(BaseAgent):
 
         if "parameter_noise" in config:
             if config["parameter_noise"] == "OU":
-                self.parameter_noise = [OUNoise(l.weight.data.size(), self.random_seed) for l in self.actor_local.body.layers]
+                self.parameter_noise = [OUNoise(l.weight.data.size(), self.random_seed) for l in
+                                        self.actor_local.body.layers]
             else:
                 logger.warning(f"action_noise {config['action_noise']} not understood.")
                 self.parameter_noise = None
@@ -135,7 +138,7 @@ class DDPGAgent(BaseAgent):
             #             previous_weights[l] = copy.deepcopy(l.weight.data)
             #             l.weight.data += random_noise
 
-                    # print(f"after {np.mean(l.weight.data.numpy())}")
+            # print(f"after {np.mean(l.weight.data.numpy())}")
             action = self.actor_local(state).cpu().data.numpy()
             # if add_noise and self.t_step == 0:
             #     for l, noise in zip(self.actor_local.body.layers, self.parameter_noise):
@@ -148,9 +151,9 @@ class DDPGAgent(BaseAgent):
             noise = self.action_noise.sample()
             # noise = 2*np.random.random(action.shape) - 1
             action += eps * noise
-            logger.debug(f"Noisy Action={action} Noise={noise}")
+            # logger.debug(f"Noisy Action={action} Noise={noise}")
         action = np.clip(action, self.action_space_low, self.action_space_high)
-        logger.debug(f"Clipped Action: {action}")
+        # logger.debug(f"Clipped Action: {action}")
 
         self.actor_local.train()
         return action
@@ -196,11 +199,21 @@ class DDPGAgent(BaseAgent):
         actor_loss.backward()
         self.actor_optimizer.step()
         self.avg_loss = [float(actor_loss), float(critic_loss)]
-        # ----------------------- update target networks ----------------------- #
-        self.soft_update(self.critic_local, self.critic_target, self.TAU)
-        self.soft_update(self.actor_local, self.actor_target, self.TAU)
 
-    def soft_update(self, local_model, target_model, tau):
+        # ----------------------- update target networks ----------------------- #
+        self.soft_update(self.critic_local, self.critic_target)
+        self.soft_update(self.actor_local, self.actor_target)
+
+        # ----------------------- update learning rates ----------------------- #
+        # TODO: this could also be done once per episode. It's normally done once per epoch in DL. One argument
+        #  against having it per episode is for continuous tasks with no episode concept. although it seems that
+        #  there is always an "episode concept"
+        if self.actor_scheduler is not None:
+            self.actor_scheduler.step()
+        if self.critic_scheduler is not None:
+            self.critic_scheduler.step()
+
+    def soft_update(self, local_model, target_model):
         """Soft update model parameters.
         θ_target = τ*θ_local + (1 - τ)*θ_target
 
@@ -211,7 +224,7 @@ class DDPGAgent(BaseAgent):
             tau (float): interpolation parameter 
         """
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
-            target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
+            target_param.data.copy_(self.TAU * local_param.data + (1.0 - self.TAU) * target_param.data)
 
     def enable_evaluation_mode(self):
         self.action_noise_backup = self.action_noise
@@ -222,3 +235,72 @@ class DDPGAgent(BaseAgent):
     def disable_evaluation_mode(self):
         self.action_noise = self.action_noise_backup
         self.param_noise = self.param_noise_backup
+
+    def set_scheduler(self, step_size: int = 1, gamma: float = 0.9,
+                      max_epochs: int = -1, scheduler_type: str = 'step', verbose=True):
+        """
+        Set a scheduler for the learning rate
+    
+        Parameters
+        ----------
+        step_size
+        gamma
+        max_epochs
+        scheduler_type
+    
+        Returns
+        -------
+    
+        """
+
+        def _decay(max_epochs, gamma):
+            lambda_lr = lambda iter: (1 - iter / max_epochs) ** gamma
+            return lambda_lr
+
+        if scheduler_type == 'step':
+            self.actor_scheduler = lr_scheduler.StepLR(self.actor_optimizer, step_size=step_size, gamma=gamma,)
+            self.critic_scheduler = lr_scheduler.StepLR(self.critic_optimizer, step_size=step_size, gamma=gamma,
+                                                        )
+        elif scheduler_type == 'exp':
+            self.actor_scheduler = lr_scheduler.ExponentialLR(self.actor_optimizer, gamma=gamma,)
+            self.critic_scheduler = lr_scheduler.ExponentialLR(self.critic_optimizer, gamma=gamma,)
+        elif scheduler_type == 'decay':
+            self.actor_scheduler = lr_scheduler.LambdaLR(self.actor_optimizer, [_decay(max_epochs, gamma)],)
+            self.critic_scheduler = lr_scheduler.LambdaLR(self.critic_optimizer, [_decay(max_epochs, gamma)],)
+        logger.info(f"Actor LR Scheduler: {self.actor_scheduler}")
+        logger.info(f"Critic LR Scheduler: {self.critic_scheduler}")
+
+    def set_optimizer(self, name: str):
+        """
+        Set the optimizer
+
+        Parameters
+        ----------
+        name
+        learning_rate
+
+        Returns
+        -------
+
+        """
+        if name == 'sgd':
+            self.actor_optimizer = optim.SGD(self.actor_local.parameters(), lr=self.LR_ACTOR, momentum=0.9,
+                                             weight_decay=self.WEIGHT_DECAY)
+            self.critic_optimizer = optim.SGD(self.critic_local.parameters(), lr=self.LR_CRITIC, momentum=0.9,
+                                              weight_decay=self.WEIGHT_DECAY)
+        elif name == 'adam':
+            self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=self.LR_ACTOR,
+                                              weight_decay=self.WEIGHT_DECAY)
+            self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.LR_CRITIC,
+                                               weight_decay=self.WEIGHT_DECAY)
+        else:
+            raise ValueError(f'Optimizer not supported: {name}. Current options: [sgd, adam]')
+
+        logger.info(f"Actor Optimizer: {self.actor_optimizer}")
+        logger.info(f"Critic Optimizer: {self.critic_optimizer}")
+
+    def __str__(self):
+        s = f"DDPG Agent: \n" \
+            f"Actor Optimizer: {self.actor_optimizer}\n" \
+            f"Critic Optimizer: {self.critic_optimizer}"
+        return s

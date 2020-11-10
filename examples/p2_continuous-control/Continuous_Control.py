@@ -20,14 +20,16 @@ TODO:
     DONE - instead of epsilon decay, split into evaluation and exploration phases (eg. evaluate for 1 episode every 50
     episodes?)
     DONE - scale=1 for OUNoise
-    - Double DDDPG? Rainbow DDPG?
-    - Try even more extreme Discount factor
-    - change noise (try random noise, adaptive noise)
-    - parameter noise
+    - interm save confi
+    - slowly decaying the learning rate as the model approaches an optima
     - activate batch normalization
     - do running mean normalization
-    - slowly decaying the learning rate as the model approaches an optima
     - parameter noise
+    - Try even more extreme Discount factor
+    - Double DDDPG? Rainbow DDPG?
+    - change noise (try random noise, adaptive noise)
+    - agent avg_loss only represent a few actions ?
+
 
 """
 
@@ -38,7 +40,6 @@ TODO:
 # instructions to double-check that you have installed
 # [Unity ML-Agents](https://github.com/Unity-Technologies/ml-agents/blob/master/docs/Installation.md)
 # and [NumPy](http://www.numpy.org/).
-from unityagents import UnityEnvironment
 import numpy as np
 import logging
 import os
@@ -48,29 +49,10 @@ import torch
 import json
 import sys
 import torch.nn.functional as F
+
 np.random.seed(42)
 torch.manual_seed(42)
-# ---------------------------------------------------------------------------------------------------
-#  Logger
-# ---------------------------------------------------------------------------------------------------
-path = Path(__file__).parent
-save_path = f"DDPG_{pd.Timestamp.utcnow().value}"
-os.makedirs(save_path, exist_ok=True)
 
-# logging.basicConfig(filename=f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log",
-#                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-#                     level=logging.INFO)
-logger = logging.getLogger()
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
-
-handler = logging.FileHandler(f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log")
-handler.setLevel(logging.DEBUG)
-handler.setFormatter(formatter)
-# stream_handler = logging.StreamHandler()
-# stream_handler.setFormatter(formatter)
-
-# logger.addHandler(stream_handler)
-logger.addHandler(handler)
 
 # ---------------------------------------------------------------------------------------------------
 #  Internal Dependencies
@@ -82,122 +64,169 @@ from rl_library.monitors import unity_monitor
 from rl_library.monitors.unity_monitor import UnityMonitor
 
 
-# ---------------------------------------------------------------------------------------------------
-#  Inputs
-# ---------------------------------------------------------------------------------------------------
-config = dict(
-    # Environment parameters
-    env_name="Reacher 2",
-    n_episodes=500,
-    length_episode=1500,
-    save_every=50,
-    save_path=save_path,
-    mode="train",  # "train" or "test"
-    evaluate_every=10,                   # Number of training episodes before 1 evaluation episode
-    eps_decay=0.99,                      # Epsilon decay rate
+def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
+    from unityagents import UnityEnvironment
+    # ---------------------------------------------------------------------------------------------------
+    #  Logger
+    # ---------------------------------------------------------------------------------------------------
+    path = Path(__file__).parent
+    save_path = f"DDPG_{pd.Timestamp.utcnow().value}"
+    os.makedirs(save_path, exist_ok=True)
 
-    # Agent Parameters
-    agent="DDPG",
-    hidden_layers_actor=(40, 30,),          #
-    hidden_layers_critic_body=(40, 30,),    #
-    hidden_layers_critic_head=(30, 15),    #
-    func_critic_body="F.relu",          #
-    func_critic_head="F.relu",          #
-    func_actor_body="F.relu",           #
-    TAU=1e-3,                           # for soft update of target parameters
-    BUFFER_SIZE=int(1e6),               # replay buffer size
-    BATCH_SIZE=64,                      # minibatch size
-    GAMMA=0.99,                          # discount factor
-    LR_ACTOR=1e-4,                      # learning rate of the actor
-    LR_CRITIC=1e-3,                     # learning rate of the critic
-    WEIGHT_DECAY=0.01,                  # L2 weight decay
-    UPDATE_EVERY=1,                     # Number of actions before making a learning step
-    action_noise="OU",                  #
-    weights_noise=None,                 #
-    batch_normalization=None,           #
-    warmup=0,                           # Number of random actions to start with as a warm-up
-    start_time=str(pd.Timestamp.utcnow()),
-)
+    # logging.basicConfig(filename=f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log",
+    #                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    #                     level=logging.INFO)
+    logger = logging.getLogger()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
 
-# ------------------------------------------------------------
-#  1. Initialization
-# ------------------------------------------------------------
-# 1. Start the Environment
+    handler = logging.FileHandler(f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log")
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(formatter)
+    # stream_handler = logging.StreamHandler()
+    # stream_handler.setFormatter(formatter)
 
-env = UnityEnvironment(file_name=f'./{config["env_name"]}.app')
+    # logger.addHandler(stream_handler)
+    logger.addHandler(handler)
+    # ---------------------------------------------------------------------------------------------------
+    #  Inputs
+    # ---------------------------------------------------------------------------------------------------
+    n_episodes = 500
+    config = dict(
+        # Environment parameters
+        env_name="Reacher 2",
+        n_episodes=n_episodes,
+        length_episode=1500,
+        save_every=100,
+        save_path=save_path,
+        mode="train",  # "train" or "test"
+        evaluate_every=50,  # Number of training episodes before 1 evaluation episode
+        eps_decay=0.99,  # Epsilon decay rate
 
-# get the default brain
-brain_name = env.brain_names[0]
-brain = env.brains[brain_name]
+        # Agent Parameters
+        agent="DDPG",
+        hidden_layers_actor=(100, 30,),  #
+        hidden_layers_critic_body=(100,),  #
+        hidden_layers_critic_head=(30,),  #
+        func_critic_body="F.relu",  #
+        func_critic_head="F.relu",  #
+        func_actor_body="F.relu",  #
+        lr_scheduler={'scheduler_type': "exp",  # "step", "exp" or "decay"
+                      'gamma': 0.99999,
+                      'step_size': 1,
+                      'max_epochs': n_episodes},
 
-# reset the environment
-env_info = env.reset(train_mode=True)[brain_name]
+        TAU=1e-3,  # for soft update of target parameters
+        BUFFER_SIZE=int(1e5),  # replay buffer size
+        BATCH_SIZE=batch_size,  # minibatch size
+        GAMMA=discount_factor,  # discount factor
+        LR_ACTOR=5e-3,  # learning rate of the actor
+        LR_CRITIC=5e-3,  # learning rate of the critic
+        WEIGHT_DECAY=weight_decay,  # L2 weight decay
+        UPDATE_EVERY=1,  # Number of actions before making a learning step
+        action_noise="OU",  #
+        weights_noise=None,  #
+        batch_normalization=None,  #
+        warmup=0,  # Number of random actions to start with as a warm-up
+        start_time=str(pd.Timestamp.utcnow()),
+    )
 
-# number of agents
-num_agents = len(env_info.agents)
-print('Number of agents:', num_agents)
+    # ------------------------------------------------------------
+    #  1. Initialization
+    # ------------------------------------------------------------
+    # 1. Start the Environment
 
-# size of each action
-action_size = brain.vector_action_space_size
-print('Size of each action:', action_size)
+    env = UnityEnvironment(file_name=f'./{config["env_name"]}.app')
 
-# examine the state space 
-states = env_info.vector_observations
-state_size = states.shape[1]
-print('There are {} agents. Each observes a state with length: {}'.format(states.shape[0], state_size))
-print('The state for the first agent looks like:', states[0])
-config.update(dict(action_size=action_size, state_size=state_size))
+    # get the default brain
+    brain_name = env.brain_names[0]
+    brain = env.brains[brain_name]
 
-# ------------------------------------------------------------
-#  2. Training
-# ------------------------------------------------------------
-if config["mode"] == "train":
-    # Actor model
-    actor = SimpleNeuralNetHead(action_size, SimpleNeuralNetBody(state_size, config["hidden_layers_actor"]),
-                                func=torch.tanh)
-    # Critic model
-    critic = DeepNeuralNetHeadCritic(action_size, SimpleNeuralNetBody(state_size, config["hidden_layers_critic_body"],
-                                                                      func=eval(config["func_critic_body"])),
-                                     hidden_layers_sizes=config["hidden_layers_critic_head"],
-                                     func=eval(config["func_critic_head"]),
-                                     end_func=None)
+    # reset the environment
+    env_info = env.reset(train_mode=True)[brain_name]
 
-    # DDPG Agent
-    agent = DDPGAgent(state_size=state_size, action_size=action_size,
-                      model_actor=actor, model_critic=critic,
-                      action_space_low=[-1, ] * action_size, action_space_high=[1, ] * action_size,
-                      config={"warmup": config["warmup"], "action_noise": config["action_noise"]},
-                      hyper_parameters=config)
+    # number of agents
+    num_agents = len(env_info.agents)
+    print('Number of agents:', num_agents)
 
-    # Unity Monitor
-    monitor = UnityMonitor(env=env, config=config)
-    monitor.eps_decay = config["eps_decay"]
+    # size of each action
+    action_size = brain.vector_action_space_size
+    print('Size of each action:', action_size)
 
-    # Training
-    start = pd.Timestamp.utcnow()
-    scores = monitor.run(agent)
-    logger.info("Average Score last 100 episodes: {}".format(np.mean(scores[-100:])))
-    elapsed_time = pd.Timedelta(pd.Timestamp.utcnow()-start).total_seconds()
-    logger.info(f"Elapsed Time: {elapsed_time} seconds")
-    config["training_time"] = elapsed_time
-    config["training_scores"] = scores
-    config["best_training_score"] = max(scores)
-    config["avg_training_score"] = np.mean(scores)
-    config["last_50_score"] = np.mean(scores[:-50])
-# ------------------------------------------------------------
-#  3. Testing
-# ------------------------------------------------------------
-else:
-    agent = DDPGAgent.load(filepath=config['save_path'], mode="test")
-    scores = unity_monitor.run(env, agent, brain_name, n_episodes=10, length_episode=1e6, mode="test")
-    logger.info(f"Test Score over {len(scores)} episodes: {np.mean(scores)}")
-    config["test_scores"] = scores
-    config["best_test_score"] = max(scores)
-    config["avg_test_score"] = np.mean(scores)
+    # examine the state space
+    states = env_info.vector_observations
+    state_size = states.shape[1]
+    print('There are {} agents. Each observes a state with length: {}'.format(states.shape[0], state_size))
+    print('The state for the first agent looks like:', states[0])
+    config.update(dict(action_size=action_size, state_size=state_size))
 
-with open(f"./{config['save_path']}/config.json", "w") as f:
-    json.dump(config, f)
+    # ------------------------------------------------------------
+    #  2. Training
+    # ------------------------------------------------------------
+    if config["mode"] == "train":
+        # Actor model
+        actor = SimpleNeuralNetHead(action_size, SimpleNeuralNetBody(state_size, config["hidden_layers_actor"]),
+                                    func=torch.tanh)
+        # Critic model
+        critic = DeepNeuralNetHeadCritic(action_size,
+                                         SimpleNeuralNetBody(state_size, config["hidden_layers_critic_body"],
+                                                             func=eval(config["func_critic_body"])),
+                                         hidden_layers_sizes=config["hidden_layers_critic_head"],
+                                         func=eval(config["func_critic_head"]),
+                                         end_func=None)
 
-# When finished, you can close the environment.
-logger.info("Closing...")
-env.close()
+        # DDPG Agent
+        agent = DDPGAgent(state_size=state_size, action_size=action_size,
+                          model_actor=actor, model_critic=critic,
+                          action_space_low=[-1, ] * action_size, action_space_high=[1, ] * action_size,
+                          config=config,
+                          )
+
+        # Unity Monitor
+        monitor = UnityMonitor(env=env, config=config)
+        monitor.eps_decay = config["eps_decay"]
+
+        # Training
+        start = pd.Timestamp.utcnow()
+        scores = monitor.run(agent)
+        logger.info("Average Score last 100 episodes: {}".format(np.mean(scores[-100:])))
+        elapsed_time = pd.Timedelta(pd.Timestamp.utcnow() - start).total_seconds()
+        logger.info(f"Elapsed Time: {elapsed_time} seconds")
+        config["training_time"] = elapsed_time
+        config["training_scores"] = scores
+        config["best_training_score"] = max(scores)
+        config["avg_training_score"] = np.mean(scores)
+        config["last_50_score"] = np.mean(scores[:-50])
+    # ------------------------------------------------------------
+    #  3. Testing
+    # ------------------------------------------------------------
+    else:
+        agent = DDPGAgent.load(filepath=config['save_path'], mode="test")
+        scores = unity_monitor.run(env, agent, brain_name, n_episodes=10, length_episode=1e6, mode="test")
+        logger.info(f"Test Score over {len(scores)} episodes: {np.mean(scores)}")
+        config["test_scores"] = scores
+        config["best_test_score"] = max(scores)
+        config["avg_test_score"] = np.mean(scores)
+
+    with open(f"./{config['save_path']}/config.json", "w") as f:
+        json.dump(config, f)
+
+    # When finished, you can close the environment.
+    logger.info("Closing...")
+    env.close()
+
+
+if __name__ == "__main__":
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    skip_first = 0
+    for batch_size in [128]:
+        for weight_decay in [ 0.01, 0.0001, ]:
+            for discount_factor in [ 0.9, 0.7, 0.8,]:
+                if skip_first > 0:
+                    skip_first -= 1
+                    continue
+                logger.warning("+="*90)
+                logger.warning(f"  RUNNING SIMULATION WITH PARAMETERS discount_factor={discount_factor}, "
+                               f"weight_decay={weight_decay}, batch_size={batch_size}")
+                logger.warning("+="*90)
+                main(discount_factor=discount_factor, weight_decay=weight_decay, batch_size=batch_size)
