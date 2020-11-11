@@ -20,8 +20,9 @@ TODO:
     DONE - instead of epsilon decay, split into evaluation and exploration phases (eg. evaluate for 1 episode every 50
     episodes?)
     DONE - scale=1 for OUNoise
-    - interm save confi
-    - slowly decaying the learning rate as the model approaches an optima
+    DONE - interm save confi
+    DONE - slowly decaying the learning rate as the model approaches an optima
+    - Check that GPU is used on Linux
     - activate batch normalization
     - do running mean normalization
     - parameter noise
@@ -29,6 +30,8 @@ TODO:
     - Double DDDPG? Rainbow DDPG?
     - change noise (try random noise, adaptive noise)
     - agent avg_loss only represent a few actions ?
+    - different learning rate decay
+    - multi agent
 
 
 """
@@ -52,11 +55,12 @@ import torch.nn.functional as F
 
 np.random.seed(42)
 torch.manual_seed(42)
-
+import importlib
 
 # ---------------------------------------------------------------------------------------------------
 #  Internal Dependencies
 # ---------------------------------------------------------------------------------------------------
+import unityagents
 from rl_library.agents.ddpg_agent import DDPGAgent
 from rl_library.agents.models.bodies import SimpleNeuralNetBody
 from rl_library.agents.models.heads import SimpleNeuralNetHead, DeepNeuralNetHeadCritic
@@ -65,7 +69,10 @@ from rl_library.monitors.unity_monitor import UnityMonitor
 
 
 def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
+    importlib.reload(unityagents)
     from unityagents import UnityEnvironment
+
+
     # ---------------------------------------------------------------------------------------------------
     #  Logger
     # ---------------------------------------------------------------------------------------------------
@@ -90,7 +97,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # ---------------------------------------------------------------------------------------------------
     #  Inputs
     # ---------------------------------------------------------------------------------------------------
-    n_episodes = 500
+    n_episodes = 250
     config = dict(
         # Environment parameters
         env_name="Reacher 2",
@@ -100,7 +107,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         save_path=save_path,
         mode="train",  # "train" or "test"
         evaluate_every=50,  # Number of training episodes before 1 evaluation episode
-        eps_decay=0.99,  # Epsilon decay rate
+        eps_decay=1,  # Epsilon decay rate
 
         # Agent Parameters
         agent="DDPG",
@@ -135,8 +142,8 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # ------------------------------------------------------------
     # 1. Start the Environment
 
-    env = UnityEnvironment(file_name=f'./Reacher_Linux/Reacher.x86_64')  # Linux
-    #env = UnityEnvironment(file_name=f'./{config["save_path"]}')  # mac OS
+    # env = UnityEnvironment(file_name=f'./Reacher_Linux/Reacher.x86_64')  # Linux
+    env = UnityEnvironment(file_name=f'./{config["env_name"]}')  # mac OS
 
     # get the default brain
     brain_name = env.brain_names[0]
@@ -184,7 +191,6 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
 
         # Unity Monitor
         monitor = UnityMonitor(env=env, config=config)
-        monitor.eps_decay = config["eps_decay"]
 
         # Training
         start = pd.Timestamp.utcnow()
@@ -192,11 +198,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         logger.info("Average Score last 100 episodes: {}".format(np.mean(scores[-100:])))
         elapsed_time = pd.Timedelta(pd.Timestamp.utcnow() - start).total_seconds()
         logger.info(f"Elapsed Time: {elapsed_time} seconds")
-        config["training_time"] = elapsed_time
-        config["training_scores"] = scores
-        config["best_training_score"] = max(scores)
-        config["avg_training_score"] = np.mean(scores)
-        config["last_50_score"] = np.mean(scores[:-50])
+
     # ------------------------------------------------------------
     #  3. Testing
     # ------------------------------------------------------------
@@ -208,9 +210,6 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         config["best_test_score"] = max(scores)
         config["avg_test_score"] = np.mean(scores)
 
-    with open(f"./{config['save_path']}/config.json", "w") as f:
-        json.dump(config, f)
-
     # When finished, you can close the environment.
     logger.info("Closing...")
     env.close()
@@ -220,9 +219,9 @@ if __name__ == "__main__":
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     skip_first = 0
-    for batch_size in [256]:
-        for weight_decay in [ 0.01, 0.0001, ]:
-            for discount_factor in [ 0.9, 0.7, 0.8,]:
+    for batch_size in [64]:
+        for weight_decay in [0.01, ]:
+            for discount_factor in [0.8,]:
                 if skip_first > 0:
                     skip_first -= 1
                     continue

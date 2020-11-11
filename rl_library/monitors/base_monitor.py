@@ -43,9 +43,10 @@ class Monitor:
             # Epsilon Parameter for balancing Exploration and exploitation
             self.eps_start = 1.0
             self.eps_end = 0.01
-            self.eps_decay = 0.995
+            self.eps_decay = config.get("eps_decay", 0.995)
         # If evaluate_every is not None, then the balancing Exploration and exploitation
         self.evaluate_every = config.get("evaluate_every")
+        self.start = pd.Timestamp.utcnow()
 
 
     def reset(self):
@@ -79,7 +80,7 @@ class Monitor:
                 scores = pickle.load(f)
 
         scores_window = deque(maxlen=100)  # last 100 scores
-        evaluation_scores = []
+        self.evaluation_scores = []
         eps = self.eps_start  # initialize epsilon
         eps_backup = eps
         t = None
@@ -129,8 +130,8 @@ class Monitor:
 
             # Turn OFF
             if self.evaluate_every is not None and i_episode % self.evaluate_every == 0:
-                evaluation_scores.append(score)  # save most recent score
-                logger.warning(f"Average Evaluation Score: {np.mean(evaluation_scores):.2f}, Last Score: {score}")
+                self.evaluation_scores.append(score)  # save most recent score
+                logger.warning(f"Average Evaluation Score: {np.mean(self.evaluation_scores):.2f}, Last Score: {score}")
                 agent.disable_evaluation_mode()
                 eps = eps_backup
                 logger.warning("Evaluation episode DEACTIVATED")
@@ -143,9 +144,9 @@ class Monitor:
             eps = max(self.eps_end, self.eps_decay * eps)  # decrease epsilon
             solved = self.logging(i_episode, scores_window, score, eps, solved, agent, t)
 
-            self.intermediate_save( i_episode, scores, agent, save_prefix, evaluation_scores)
+            self.intermediate_save( i_episode, scores, agent, save_prefix)
 
-        self.save_and_plot(scores, agent, save_prefix, evaluation_scores)
+        self.save_and_plot(scores, agent, save_prefix)
 
         te = pd.Timestamp.utcnow()
         logger.info(f"Elapsed Time: {pd.Timedelta(te - ts)}")
@@ -176,7 +177,7 @@ class Monitor:
             solved = True
         return solved
 
-    def intermediate_save(self, i_episode, scores, agent, save_prefix, evaluation_scores):
+    def intermediate_save(self, i_episode, scores, agent, save_prefix):
         if self.save_every and self.mode == "train" and self.save_path and i_episode % self.save_every == 0:
             logger.info(f'Saving model to {self.save_path}')
             if not os.path.exists(self.save_path):
@@ -186,7 +187,7 @@ class Monitor:
                 pickle.dump(scores, f)
             if not self.render:
                 plot_scores(scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix)
-                plot_scores(evaluation_scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix + '_evaluation')
+                plot_scores(self.evaluation_scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix + '_evaluation')
                 plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss', log=True)
 
             # Save config
@@ -197,13 +198,19 @@ class Monitor:
         self.config["training_scores"] = scores
         self.config["best_training_score"] = max(scores)
         self.config["avg_training_score"] = np.mean(scores)
+
+        self.config["eval_scores"] = self.evaluation_scores
+        self.config["best_eval_score"] = max(self.evaluation_scores)
+        self.config["avg_eval_score"] = np.mean(self.evaluation_scores)
+
         if len(scores) > 50:
             self.config["last_50_score"] = np.mean(scores[:-50])
 
+        self.config["elapsed_time"] = pd.Timedelta(pd.Timestamp.utcnow() - self.start).total_seconds()
         with open(f"./{self.config['save_path']}/config.json", "w") as f:
             json.dump(self.config, f)
 
-    def save_and_plot(self, scores, agent, save_prefix, evaluation_scores):
+    def save_and_plot(self, scores, agent, save_prefix):
         if self.save_path and self.mode == "train":
             if not os.path.exists(self.save_path):
                 os.makedirs(self.save_path, exist_ok=True)
@@ -212,7 +219,7 @@ class Monitor:
                 pickle.dump(scores, f)
             if not self.render:
                 plot_scores(scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix)
-                plot_scores(evaluation_scores, path=self.save_path, threshold=self.threshold,
+                plot_scores(self.evaluation_scores, path=self.save_path, threshold=self.threshold,
                             prefix=save_prefix + '_evaluation')
                 plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss', log=True)
             # Save config

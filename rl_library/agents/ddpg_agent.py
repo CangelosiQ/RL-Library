@@ -258,15 +258,20 @@ class DDPGAgent(BaseAgent):
             return lambda_lr
 
         if scheduler_type == 'step':
-            self.actor_scheduler = lr_scheduler.StepLR(self.actor_optimizer, step_size=step_size, gamma=gamma,)
+            self.actor_scheduler = lr_scheduler.StepLR(self.actor_optimizer, step_size=step_size, gamma=gamma, )
             self.critic_scheduler = lr_scheduler.StepLR(self.critic_optimizer, step_size=step_size, gamma=gamma,
                                                         )
         elif scheduler_type == 'exp':
-            self.actor_scheduler = lr_scheduler.ExponentialLR(self.actor_optimizer, gamma=gamma,)
-            self.critic_scheduler = lr_scheduler.ExponentialLR(self.critic_optimizer, gamma=gamma,)
+            self.actor_scheduler = lr_scheduler.ExponentialLR(self.actor_optimizer, gamma=gamma, )
+            self.critic_scheduler = lr_scheduler.ExponentialLR(self.critic_optimizer, gamma=gamma, )
         elif scheduler_type == 'decay':
-            self.actor_scheduler = lr_scheduler.LambdaLR(self.actor_optimizer, [_decay(max_epochs, gamma)],)
-            self.critic_scheduler = lr_scheduler.LambdaLR(self.critic_optimizer, [_decay(max_epochs, gamma)],)
+            self.actor_scheduler = lr_scheduler.LambdaLR(self.actor_optimizer, [_decay(max_epochs, gamma)], )
+            self.critic_scheduler = lr_scheduler.LambdaLR(self.critic_optimizer, [_decay(max_epochs, gamma)], )
+        elif scheduler_type == 'plateau':
+            self.actor_scheduler = lr_scheduler.LambdaLR(self.actor_optimizer, [_decay(max_epochs, gamma)], )
+            self.critic_scheduler = lr_scheduler.ReduceLROnPlateau(self.critic_optimizer, mode='min', factor=0.1,
+                                                                   patience=100, threshold=0.0001, threshold_mode='rel',
+                                                                   cooldown=0, min_lr=0, eps=1e-08, verbose=False)
         logger.info(f"Actor LR Scheduler: {self.actor_scheduler}")
         logger.info(f"Critic LR Scheduler: {self.critic_scheduler}")
 
