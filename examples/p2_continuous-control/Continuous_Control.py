@@ -68,7 +68,11 @@ from rl_library.monitors import unity_monitor
 from rl_library.monitors.unity_monitor import UnityMonitor
 
 
-def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
+def main(discount_factor=0.9, weight_decay=0.001, batch_size=64,
+         hidden_layers_actor=(100, 30,),  #
+         hidden_layers_critic_body=(100,),  #
+         hidden_layers_critic_head=(30,),  #
+         ):
     importlib.reload(unityagents)
     from unityagents import UnityEnvironment
 
@@ -111,9 +115,9 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
 
         # Agent Parameters
         agent="DDPG",
-        hidden_layers_actor=(100, 30,),  #
-        hidden_layers_critic_body=(100,),  #
-        hidden_layers_critic_head=(30,),  #
+        hidden_layers_actor=hidden_layers_actor,  #
+        hidden_layers_critic_body=hidden_layers_critic_body,  #
+        hidden_layers_critic_head=hidden_layers_critic_head,  #
         func_critic_body="F.relu",  #
         func_critic_head="F.relu",  #
         func_actor_body="F.relu",  #
@@ -221,13 +225,21 @@ if __name__ == "__main__":
     logger.setLevel(logging.INFO)
     skip_first = 0
     for batch_size in [64]:
-        for weight_decay in [0.01, ]:
-            for discount_factor in [0.8,]:
-                if skip_first > 0:
-                    skip_first -= 1
-                    continue
-                logger.warning("+="*90)
-                logger.warning(f"  RUNNING SIMULATION WITH PARAMETERS discount_factor={discount_factor}, "
-                               f"weight_decay={weight_decay}, batch_size={batch_size}")
-                logger.warning("+="*90)
-                main(discount_factor=discount_factor, weight_decay=weight_decay, batch_size=batch_size)
+        for weight_decay in [0.01, 0.001 ]:
+            for discount_factor in [0.8, 0.9]:
+                for hid_l_act, hid_l_cri_b, hid_l_cri_h in zip([(35, 30, 25), (35, 30, 25), (100, 60, 20)],
+                                                               [(35, ),       (35, 30),     (100, 60, )],
+                                                               [(30, 25),     (30, 25),     (40, 20)]
+                                                               ):
+                    if skip_first > 0:
+                        skip_first -= 1
+                        continue
+                    logger.warning("+="*90)
+                    logger.warning(f"  RUNNING SIMULATION WITH PARAMETERS discount_factor={discount_factor}, "
+                                   f"weight_decay={weight_decay}, batch_size={batch_size}")
+                    logger.warning("+="*90)
+                    main(discount_factor=discount_factor, weight_decay=weight_decay, batch_size=batch_size,
+                         hidden_layers_actor=hid_l_act,  #
+                         hidden_layers_critic_body=hid_l_cri_b,  #
+                         hidden_layers_critic_head=hid_l_cri_h,  #
+                         )
