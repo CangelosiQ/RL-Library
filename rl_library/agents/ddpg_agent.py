@@ -58,7 +58,8 @@ class DDPGAgent(BaseAgent):
         # Noise process
         if "action_noise" in config:
             if config["action_noise"] == "OU":
-                self.action_noise = OUNoise(self.action_size, self.random_seed)
+                self.action_noise = OUNoise(self.action_size, self.random_seed, scale=config.get(
+                    "action_noise_scale", 1))
             else:
                 logger.warning(f"action_noise {config['action_noise']} not understood.")
                 self.action_noise = None

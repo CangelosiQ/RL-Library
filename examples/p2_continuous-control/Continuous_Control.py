@@ -22,7 +22,6 @@ TODO:
     DONE - scale=1 for OUNoise
     DONE - interm save confi
     DONE - slowly decaying the learning rate as the model approaches an optima
-    - Check that GPU is used on Linux
     - activate batch normalization
     - do running mean normalization
     - parameter noise
@@ -32,6 +31,7 @@ TODO:
     - agent avg_loss only represent a few actions ?
     - different learning rate decay
     - multi agent
+    - Check that GPU is used on Linux
 
 
 """
@@ -131,6 +131,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         WEIGHT_DECAY=weight_decay,  # L2 weight decay
         UPDATE_EVERY=1,  # Number of actions before making a learning step
         action_noise="OU",  #
+        action_noise_scale=0.5,
         weights_noise=None,  #
         batch_normalization=None,  #
         warmup=0,  # Number of random actions to start with as a warm-up
