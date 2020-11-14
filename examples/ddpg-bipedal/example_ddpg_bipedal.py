@@ -54,38 +54,40 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         # Environment parameters
         env_name='BipedalWalker-v3',
         n_episodes=n_episodes,
-        length_episode=700,
+        length_episode=1500,
         save_every=100,
         save_path=f"./DDPG_Bipedal_{pd.Timestamp.utcnow().value}",
         mode="train",  # "train" or "test"
         evaluate_every=50,  # Number of training episodes before 1 evaluation episode
-        eps_decay=0.995,  # Epsilon decay rate
-        render=False,
+        eps_decay=0.99,  # Epsilon decay rate
+        render=True,
 
         # Agent Parameters
         agent="DDPG",
-        hidden_layers_actor=(100, 30),  #
-        hidden_layers_critic_body=(100,),  #
-        hidden_layers_critic_head=(30,),  #
+        hidden_layers_actor=(256, 128),  #
+        hidden_layers_critic_body=(256,),  #
+        hidden_layers_critic_head=(256, 128),  #
         func_critic_body="F.relu",  #
         func_critic_head="F.relu",  #
         func_actor_body="F.relu",  #
-        lr_scheduler={'scheduler_type': "exp",  # "step", "exp" or "decay"
-                      'gamma': 0.99995,
-                      'step_size': 1,
-                      'max_epochs': n_episodes},
-        # Hyper Parameters Agent Models
+        lr_scheduler=None,#{'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
+                      # 'gamma': 0.5,  # 0.99999,
+                      # 'step_size': 1,
+                      # 'milestones': [25*1000 * i for i in range(1, 6)],
+                      # 'max_epochs': n_episodes},
+
         TAU=1e-3,  # for soft update of target parameters
         BUFFER_SIZE=int(1e5),  # replay buffer size
-        BATCH_SIZE=batch_size,  # minibatch size
-        GAMMA=discount_factor,  # discount factor
-        LR_ACTOR=5e-3,  # learning rate of the actor
-        LR_CRITIC=5e-3,  # learning rate of the critic
-        WEIGHT_DECAY=weight_decay,  # L2 weight decay
+        BATCH_SIZE=128,  # minibatch size
+        GAMMA=0.99,  # discount factor
+        LR_ACTOR=1e-3,  # learning rate of the actor
+        LR_CRITIC=1e-4,  # learning rate of the critic
+        WEIGHT_DECAY=0,  # L2 weight decay
         UPDATE_EVERY=1,  # Number of actions before making a learning step
         action_noise="OU",  #
+        action_noise_scale=1,
         weights_noise=None,  #
-        batch_normalization=None,  #
+        state_normalizer=None, #"RunningMeanStd",  #
         warmup=0,  # Number of random actions to start with as a warm-up
         start_time=str(pd.Timestamp.utcnow()),
     )
@@ -125,7 +127,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
 
 if __name__ == "__main__":
 
-    for batch_size in [64, 128]:
-        for weight_decay in [0, 0.0001]:
-            for discount_factor in [0.6, 0.8]:
+    for batch_size in [64]:
+        for weight_decay in [0.000001, ]:
+            for discount_factor in [0.9, ]:
                     main(discount_factor=discount_factor, weight_decay=weight_decay)

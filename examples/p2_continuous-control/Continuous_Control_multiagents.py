@@ -14,18 +14,6 @@ Notes:
     course when the agent is far away it needs to know which suite of actions will get him back to the ball direction.
 
 TODO:
-    DONE - Proper Book-Keeeping
-    DONE - Raise number of episode to 2000 to approximately match the DDPG 2.5 million steps in the results table
-    DONE - split agent scores between actor and critic to follow better what is hapening there
-    DONE - instead of epsilon decay, split into evaluation and exploration phases (eg. evaluate for 1 episode every 50
-    episodes?)
-    DONE - scale=1 for OUNoise
-    DONE - interm save confi
-    DONE - slowly decaying the learning rate as the model approaches an optima
-    DONE - reduce weight decay
-    DONE - activate batch normalization
-    DONE - do running mean normalization
-    DONE - Try even more extreme Discount factor
     - Reward Normalization
     - Try BatchNorm
     - Try leakyrelu
@@ -82,7 +70,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     #  Logger
     # ---------------------------------------------------------------------------------------------------
     path = Path(__file__).parent
-    save_path = f"./results/DDPG_{pd.Timestamp.utcnow().value}"
+    save_path = f"./results/MultiAgents_DDPG_{pd.Timestamp.utcnow().value}"
     os.makedirs(save_path, exist_ok=True)
 
     # logging.basicConfig(filename=f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log",
@@ -102,10 +90,10 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # ---------------------------------------------------------------------------------------------------
     #  Inputs
     # ---------------------------------------------------------------------------------------------------
-    n_episodes = 300
+    n_episodes = 500
     config = dict(
         # Environment parameters
-        env_name="Reacher 2",
+        env_name="Reacher",
         n_episodes=n_episodes,
         length_episode=1500,
         save_every=100,
@@ -116,32 +104,31 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
 
         # Agent Parameters
         agent="DDPG",
-        hidden_layers_actor=(200, 150),  #
-        hidden_layers_critic_body=(400,),  #
-        hidden_layers_critic_head=(300, ),  #
+        hidden_layers_actor=(40, 30, 20),  #
+        hidden_layers_critic_body=(40,),  #
+        hidden_layers_critic_head=(30, 20),  #
         func_critic_body="F.relu",  #
         func_critic_head="F.relu",  #
         func_actor_body="F.relu",  #
-        lr_scheduler=None,
-    # {'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
-    #                   'gamma': 0.5,  # 0.99999,
-    #                   'step_size': 1,
-    #                   'milestones': [10*1000 * i for i in range(1, 6)],
-    #                   'max_epochs': n_episodes},
+        lr_scheduler={'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
+                      'gamma': 0.5,  # 0.99999,
+                      'step_size': 1,
+                      'milestones': [25*1000 * i for i in range(1, 6)],
+                      'max_epochs': n_episodes},
 
-        TAU=1e-3,  # for soft update of target parameters
-        BUFFER_SIZE=int(1e6),  # replay buffer size
-        BATCH_SIZE=128,  # minibatch size
-        GAMMA=0.99,  # discount factor
-        LR_ACTOR=1e-3,  # learning rate of the actor
-        LR_CRITIC=1e-3,  # learning rate of the critic
-        WEIGHT_DECAY=0,  # L2 weight decay
-        UPDATE_EVERY=1,  # Number of actions before making a learning step
+        TAU=5e-3,  # for soft update of target parameters
+        BUFFER_SIZE=int(1e5),  # replay buffer size
+        BATCH_SIZE=batch_size,  # minibatch size
+        GAMMA=discount_factor,  # discount factor
+        LR_ACTOR=5e-3,  # learning rate of the actor
+        LR_CRITIC=5e-3,  # learning rate of the critic
+        WEIGHT_DECAY=weight_decay,  # L2 weight decay
+        UPDATE_EVERY=10,  # Number of actions before making a learning step
         action_noise="OU",  #
-        action_noise_scale=1,
+        action_noise_scale=0.01,
         weights_noise=None,  #
-        state_normalizer=None,  # "RunningMeanStd"
-        warmup=0,  # Number of random actions to start with as a warm-up
+        state_normalizer="RunningMeanStd",  #
+        warmup=1e4,  # Number of random actions to start with as a warm-up
         start_time=str(pd.Timestamp.utcnow()),
     )
 
@@ -163,6 +150,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # number of agents
     num_agents = len(env_info.agents)
     print('Number of agents:', num_agents)
+    config["n_agents"] = num_agents
 
     # size of each action
     action_size = brain.vector_action_space_size
@@ -228,7 +216,7 @@ if __name__ == "__main__":
     logger.setLevel(logging.INFO)
     skip_first = 0
     for batch_size in [64]:
-        for weight_decay in [0.0001, ]:
+        for weight_decay in [0.000001, ]:
             for discount_factor in [0.9,]:
                 if skip_first > 0:
                     skip_first -= 1

@@ -48,7 +48,6 @@ class Monitor:
         self.evaluate_every = config.get("evaluate_every")
         self.start = pd.Timestamp.utcnow()
 
-
     def reset(self):
         state = self.reset_env()
         last_actions = deque(maxlen=100)
@@ -86,13 +85,12 @@ class Monitor:
         t = None
         for i_episode in range(1, self.n_episodes + 1):
             state, states, rewards, actions, score, last_states, last_actions = self.reset()
+            agent.reset()  # Reset Noise Random Process
 
             # Turn ON Evaluation Episode
             if self.evaluate_every is not None and i_episode % self.evaluate_every == 0:
                 logger.warning("Evaluation episode ACTIVATED")
-                eps_backup = copy(eps)
-                eps = 0
-                agent.enable_evaluation_mode()
+                agent.training = False
 
             for t in range(int(self.length_episode)):
                 action = agent.act(state, eps=eps)
@@ -132,8 +130,7 @@ class Monitor:
             if self.evaluate_every is not None and i_episode % self.evaluate_every == 0:
                 self.evaluation_scores.append(score)  # save most recent score
                 logger.warning(f"Average Evaluation Score: {np.mean(self.evaluation_scores):.2f}, Last Score: {score}")
-                agent.disable_evaluation_mode()
-                eps = eps_backup
+                agent.training = True
                 logger.warning("Evaluation episode DEACTIVATED")
             else:
                 if self.mode == "train" and not agent.step_every_action:

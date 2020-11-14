@@ -71,7 +71,7 @@ class DeepNeuralNetHeadCritic(nn.Module):
         super(DeepNeuralNetHeadCritic, self).__init__()
         self.seed = np.random.seed(seed)
         self.body = body
-        self.layers_sizes = (body.layers_sizes[-1] + action_size,) + hidden_layers_sizes + (action_size,)
+        self.layers_sizes = (body.layers_sizes[-1] + action_size,) + hidden_layers_sizes + (1,) #(action_size,)
 
         self.layers = nn.ModuleList(
             [nn.Linear(inputs, outputs) for inputs, outputs in zip(self.layers_sizes[:-1], self.layers_sizes[1:])])

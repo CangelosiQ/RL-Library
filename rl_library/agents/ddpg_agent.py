@@ -10,7 +10,7 @@ import logging
 
 from rl_library.agents.base_agent import BaseAgent
 from rl_library.utils.noises import OUNoise
-from rl_library.utils.normalizer import MeanStdNormalizer
+from rl_library.utils.normalizer import MeanStdNormalizer, RunningMeanStd
 from rl_library.utils.replay_buffers import ReplayBuffer
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -52,29 +52,10 @@ class DDPGAgent(BaseAgent):
 
         self.set_optimizer(config.get("optimizer", "adam"))
 
-        if config.get('lr_scheduler'):
-            self.set_scheduler(**config.get('lr_scheduler'))
+        self.set_scheduler(config.get('lr_scheduler'))
 
-        # Noise process
-        if "action_noise" in config:
-            if config["action_noise"] == "OU":
-                self.action_noise = OUNoise(self.action_size, self.random_seed, scale=config.get(
-                    "action_noise_scale", 1))
-            else:
-                logger.warning(f"action_noise {config['action_noise']} not understood.")
-                self.action_noise = None
-        else:
-            self.action_noise = None
-
-        if "parameter_noise" in config:
-            if config["parameter_noise"] == "OU":
-                self.parameter_noise = [OUNoise(l.weight.data.size(), self.random_seed) for l in
-                                        self.actor_local.body.layers]
-            else:
-                logger.warning(f"action_noise {config['action_noise']} not understood.")
-                self.parameter_noise = None
-        else:
-            self.parameter_noise = None
+        self.init_normalizers(config=config)
+        self.init_noises(config=config)
 
         # Replay memory
         self.memory = ReplayBuffer(self.action_size, self.BUFFER_SIZE, self.BATCH_SIZE, self.random_seed)
@@ -82,36 +63,40 @@ class DDPGAgent(BaseAgent):
         self.action_space_high = action_space_high
 
         self.avg_loss = [0, 0]  # actor, critic
+        self.training = True
 
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
-        # Save experience / reward
         # logger.debug(f"State= {state}, Action={action}, Reward={reward}, done={done}")
-        self.memory.add(state, action, reward, next_state, done)
+
+        # For each agent, save experience / reward
+        for i in range(state.shape[0]):
+            self.memory.add(state, action, reward, next_state, done)
 
         # Learn every UPDATE_EVERY time steps.
         self.t_step = (self.t_step + 1) % self.UPDATE_EVERY
-        if self.t_step == 0 and self.warmup <= 0:
+        if self.t_step == 0 and self.warmup <= 0 and self.training:
             # Learn, if enough samples are available in memory
             if len(self.memory) > self.BATCH_SIZE:
                 experiences = self.memory.sample()
-                # experiences = self.batch_normalization(experiences)
+                experiences = self.batch_normalization(experiences)
                 self.learn(experiences, self.GAMMA)
         elif self.warmup > 0:
             self.warmup -= 1
             if self.warmup == 0:
                 logger.info(f"End of warm up after {len(self.memory)} steps.")
 
-    @staticmethod
-    def batch_normalization(experiences):
+    def batch_normalization(self, experiences):
         states, actions, rewards, next_states, dones = experiences
-        normalizer = MeanStdNormalizer()
-        states = normalizer(states)
-        next_states = normalizer(next_states, read_only=True)
-        rewards = normalizer(rewards)
-        states = torch.from_numpy(states).float().to(device)
-        next_states = torch.from_numpy(next_states).float().to(device)
-        rewards = torch.from_numpy(rewards).float().to(device)
+        if self.state_normalizer:
+            states = self.state_normalizer(states)
+            next_states = self.state_normalizer(next_states)
+            states = torch.from_numpy(states).float().to(device)
+            next_states = torch.from_numpy(next_states).float().to(device)
+
+        if self.reward_normalizer:
+            rewards = self.reward_normalizer(rewards)
+            rewards = torch.from_numpy(rewards).float().to(device)
 
         return (states, actions, rewards, next_states, dones)
 
@@ -121,6 +106,12 @@ class DDPGAgent(BaseAgent):
             # Random action
             action = np.random.uniform(self.action_space_low, self.action_space_high)
             return action
+
+        if self.state_normalizer:
+            if self.state_normalizer.__class__.__name__ == "BatchNorm1d":
+                state = self.state_normalizer(state)
+            else:
+                state = self.state_normalizer(state, read_only=True)
         state = torch.from_numpy(state).float().to(device)
 
         self.actor_local.eval()
@@ -148,7 +139,7 @@ class DDPGAgent(BaseAgent):
 
         # logger.debug(f"State= {state}, Action={action}")
 
-        if self.action_noise is not None:
+        if self.action_noise is not None and self.training:
             noise = self.action_noise.sample()
             # noise = 2*np.random.random(action.shape) - 1
             action += eps * noise
@@ -160,7 +151,10 @@ class DDPGAgent(BaseAgent):
         return action
 
     def reset(self):
-        self.noise.reset()
+        if self.action_noise:
+            self.action_noise.reset()
+        if self.parameter_noise:
+            self.parameter_noise.reset()
 
     def learn(self, experiences, gamma):
         """Update policy and value parameters using given batch of experience tuples.
@@ -180,15 +174,18 @@ class DDPGAgent(BaseAgent):
         # Get predicted next-state actions and Q values from target models
         actions_next = self.actor_target(next_states)
         Q_targets_next = self.critic_target(next_states, actions_next)
+
         # Compute Q targets for current states (y_i)
         Q_targets = rewards + (gamma * Q_targets_next * (1 - dones))
+
         # Compute critic loss
         Q_expected = self.critic_local(states, actions)
         critic_loss = F.mse_loss(Q_expected, Q_targets)
+
         # Minimize the loss
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 5)
+        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
         self.critic_optimizer.step()
 
         # ---------------------------- update actor ---------------------------- #
@@ -198,6 +195,7 @@ class DDPGAgent(BaseAgent):
         # Minimize the loss
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.actor_local.parameters(), 1)
         self.actor_optimizer.step()
         self.avg_loss = [float(actor_loss), float(critic_loss)]
 
@@ -227,18 +225,7 @@ class DDPGAgent(BaseAgent):
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
             target_param.data.copy_(self.TAU * local_param.data + (1.0 - self.TAU) * target_param.data)
 
-    def enable_evaluation_mode(self):
-        self.action_noise_backup = self.action_noise
-        self.param_noise_backup = self.parameter_noise
-        self.action_noise = None
-        self.param_noise = None
-
-    def disable_evaluation_mode(self):
-        self.action_noise = self.action_noise_backup
-        self.param_noise = self.param_noise_backup
-
-    def set_scheduler(self, step_size: int = 1, gamma: float = 0.9,
-                      max_epochs: int = -1, scheduler_type: str = 'step', verbose=True):
+    def set_scheduler(self, config=None):
         """
         Set a scheduler for the learning rate
     
@@ -248,31 +235,50 @@ class DDPGAgent(BaseAgent):
         gamma
         max_epochs
         scheduler_type
+        verbose
+        milestones
     
         Returns
         -------
     
         """
+        self.actor_scheduler = None
+        self.critic_scheduler = None
+        if config:
 
-        def _decay(max_epochs, gamma):
-            lambda_lr = lambda iter: (1 - iter / max_epochs) ** gamma
-            return lambda_lr
+            scheduler_type = config.get("scheduler_type")
+            step_size = config.get("step_size", 1)
+            gamma = config.get("gamma", 0.9)
+            max_epochs= config.get("max_epochs", -1)
+            verbose = config.get("verbose", True)
+            milestones = config.get("milestones", [50 * i for i in range(1, 6)])
 
-        if scheduler_type == 'step':
-            self.actor_scheduler = lr_scheduler.StepLR(self.actor_optimizer, step_size=step_size, gamma=gamma, )
-            self.critic_scheduler = lr_scheduler.StepLR(self.critic_optimizer, step_size=step_size, gamma=gamma,
-                                                        )
-        elif scheduler_type == 'exp':
-            self.actor_scheduler = lr_scheduler.ExponentialLR(self.actor_optimizer, gamma=gamma, )
-            self.critic_scheduler = lr_scheduler.ExponentialLR(self.critic_optimizer, gamma=gamma, )
-        elif scheduler_type == 'decay':
-            self.actor_scheduler = lr_scheduler.LambdaLR(self.actor_optimizer, [_decay(max_epochs, gamma)], )
-            self.critic_scheduler = lr_scheduler.LambdaLR(self.critic_optimizer, [_decay(max_epochs, gamma)], )
-        elif scheduler_type == 'plateau':
-            self.actor_scheduler = lr_scheduler.LambdaLR(self.actor_optimizer, [_decay(max_epochs, gamma)], )
-            self.critic_scheduler = lr_scheduler.ReduceLROnPlateau(self.critic_optimizer, mode='min', factor=0.1,
-                                                                   patience=100, threshold=0.0001, threshold_mode='rel',
-                                                                   cooldown=0, min_lr=0, eps=1e-08, verbose=False)
+            def _decay(max_epochs, gamma):
+                lambda_lr = lambda iter: (1 - iter / max_epochs) ** gamma
+                return lambda_lr
+
+            if scheduler_type == 'step':
+                self.actor_scheduler = lr_scheduler.StepLR(self.actor_optimizer, step_size=step_size, gamma=gamma, )
+                self.critic_scheduler = lr_scheduler.StepLR(self.critic_optimizer, step_size=step_size, gamma=gamma,
+                                                            )
+            elif scheduler_type == 'exp':
+                self.actor_scheduler = lr_scheduler.ExponentialLR(self.actor_optimizer, gamma=gamma, )
+                self.critic_scheduler = lr_scheduler.ExponentialLR(self.critic_optimizer, gamma=gamma, )
+            elif scheduler_type == 'decay':
+                self.actor_scheduler = lr_scheduler.LambdaLR(self.actor_optimizer, [_decay(max_epochs, gamma)], )
+                self.critic_scheduler = lr_scheduler.LambdaLR(self.critic_optimizer, [_decay(max_epochs, gamma)], )
+            elif scheduler_type == 'plateau':
+                self.actor_scheduler = lr_scheduler.ReduceLROnPlateau(self.actor_optimizer, mode='min', factor=0.1,
+                                                                      patience=100, threshold=0.0001, threshold_mode='rel',
+                                                                      cooldown=0, min_lr=0, eps=1e-08, verbose=verbose)
+                self.critic_scheduler = lr_scheduler.ReduceLROnPlateau(self.critic_optimizer, mode='min', factor=0.1,
+                                                                       patience=100, threshold=0.0001, threshold_mode='rel',
+                                                                       cooldown=0, min_lr=0, eps=1e-08, verbose=verbose)
+
+            elif scheduler_type == 'multistep':
+                self.actor_scheduler = lr_scheduler.MultiStepLR(self.actor_optimizer, milestones, gamma=gamma)
+                self.critic_scheduler = lr_scheduler.MultiStepLR(self.critic_optimizer, milestones, gamma=gamma)
+
         logger.info(f"Actor LR Scheduler: {self.actor_scheduler}")
         logger.info(f"Critic LR Scheduler: {self.critic_scheduler}")
 
@@ -305,8 +311,48 @@ class DDPGAgent(BaseAgent):
         logger.info(f"Actor Optimizer: {self.actor_optimizer}")
         logger.info(f"Critic Optimizer: {self.critic_optimizer}")
 
+    def init_normalizers(self, config):
+        self.state_normalizer = config.get("state_normalizer")
+        self.reward_normalizer = config.get("reward_normalizer")
+
+        if self.state_normalizer == "MeanStd":
+            self.state_normalizer = MeanStdNormalizer()
+        elif self.state_normalizer == "RunningMeanStd":
+            self.state_normalizer = RunningMeanStd(shape=self.state_size)
+        elif self.state_normalizer == "BatchNorm":
+            self.state_normalizer = nn.BatchNorm1d(self.state_size)
+
+        if self.reward_normalizer == "MeanStd":
+            self.reward_normalizer = MeanStdNormalizer()
+
+        logger.info(f"Initiated state_normalizer={self.state_normalizer}, reward_normalizer={self.reward_normalizer}")
+
+    def init_noises(self, config):
+        # Noise process
+        if "action_noise" in config:
+            if config["action_noise"] == "OU":
+                self.action_noise = OUNoise(self.action_size, self.random_seed, scale=config.get(
+                    "action_noise_scale", 1))
+            else:
+                logger.warning(f"action_noise {config['action_noise']} not understood.")
+                self.action_noise = None
+        else:
+            self.action_noise = None
+
+        if "parameter_noise" in config:
+            if config["parameter_noise"] == "OU":
+                self.parameter_noise = [OUNoise(l.weight.data.size(), self.random_seed) for l in
+                                        self.actor_local.body.layers]
+            else:
+                logger.warning(f"action_noise {config['action_noise']} not understood.")
+                self.parameter_noise = None
+        else:
+            self.parameter_noise = None
+
     def __str__(self):
         s = f"DDPG Agent: \n" \
             f"Actor Optimizer: {self.actor_optimizer}\n" \
             f"Critic Optimizer: {self.critic_optimizer}"
+        if self.state_normalizer:
+            s += f"\nState Optimizer: {self.state_normalizer}"
         return s

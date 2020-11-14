@@ -38,11 +38,12 @@ class UnityMonitor(Monitor):
         env_info = self.env.reset(train_mode=True)[self.brain_name]
         return env_info.vector_observations[0]
 
-    def env_step(self, action):
+    def env_step(self, action, agent_id=0):
+        #print(f"Step agent {agent_id}")
         env_info = self.env.step(self.process_action(action))[self.brain_name]  # send the action to the environment
-        next_state = env_info.vector_observations[0]  # get the next state
-        reward = env_info.rewards[0]  # get the reward
-        done = env_info.local_done[0]  # see if episode has finished
+        next_state = env_info.vector_observations[agent_id]  # get the next state
+        reward = env_info.rewards[agent_id]  # get the reward
+        done = env_info.local_done[agent_id]  # see if episode has finished
         return next_state, reward, done, None
 
     def play(self, agent):

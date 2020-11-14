@@ -12,33 +12,6 @@ Notes:
     - Discount factor seem to have good influence, the agent should probably aim at the ball anytime so every action
     is important. Present actions even more than future because the best time to follow the ball is always NOW. Of
     course when the agent is far away it needs to know which suite of actions will get him back to the ball direction.
-
-TODO:
-    DONE - Proper Book-Keeeping
-    DONE - Raise number of episode to 2000 to approximately match the DDPG 2.5 million steps in the results table
-    DONE - split agent scores between actor and critic to follow better what is hapening there
-    DONE - instead of epsilon decay, split into evaluation and exploration phases (eg. evaluate for 1 episode every 50
-    episodes?)
-    DONE - scale=1 for OUNoise
-    DONE - interm save confi
-    DONE - slowly decaying the learning rate as the model approaches an optima
-    DONE - reduce weight decay
-    DONE - activate batch normalization
-    DONE - do running mean normalization
-    DONE - Try even more extreme Discount factor
-    - Reward Normalization
-    - Try BatchNorm
-    - Try leakyrelu
-    - Use baseline DDPG
-    - use AdaptiveParamNoiseSpec
-    - parameter noise
-    - Double DDDPG? Rainbow DDPG?
-    - agent avg_loss only represent a few actions ?
-    - different learning rate decay
-    - multi agent
-    - Check that GPU is used on Linux
-
-
 """
 
 # ---------------------------------------------------------------------------------------------------
@@ -66,12 +39,7 @@ import importlib
 #  Internal Dependencies
 # ---------------------------------------------------------------------------------------------------
 import unityagents
-from rl_library.agents.ddpg_agent import DDPGAgent
-from rl_library.agents.models.bodies import SimpleNeuralNetBody
-from rl_library.agents.models.heads import SimpleNeuralNetHead, DeepNeuralNetHeadCritic
-from rl_library.monitors import unity_monitor
-from rl_library.monitors.unity_monitor import UnityMonitor
-
+from baselines.ddpg.ddpg import learn
 
 def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     importlib.reload(unityagents)
@@ -102,7 +70,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # ---------------------------------------------------------------------------------------------------
     #  Inputs
     # ---------------------------------------------------------------------------------------------------
-    n_episodes = 300
+    n_episodes = 250
     config = dict(
         # Environment parameters
         env_name="Reacher 2",
@@ -116,31 +84,29 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
 
         # Agent Parameters
         agent="DDPG",
-        hidden_layers_actor=(200, 150),  #
-        hidden_layers_critic_body=(400,),  #
-        hidden_layers_critic_head=(300, ),  #
+        hidden_layers_actor=(100, 30,),  #
+        hidden_layers_critic_body=(100,),  #
+        hidden_layers_critic_head=(30,),  #
         func_critic_body="F.relu",  #
         func_critic_head="F.relu",  #
         func_actor_body="F.relu",  #
-        lr_scheduler=None,
-    # {'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
-    #                   'gamma': 0.5,  # 0.99999,
-    #                   'step_size': 1,
-    #                   'milestones': [10*1000 * i for i in range(1, 6)],
-    #                   'max_epochs': n_episodes},
+        lr_scheduler={'scheduler_type': "exp",  # "step", "exp" or "decay"
+                      'gamma': 0.99999,
+                      'step_size': 1,
+                      'max_epochs': n_episodes},
 
-        TAU=1e-3,  # for soft update of target parameters
-        BUFFER_SIZE=int(1e6),  # replay buffer size
-        BATCH_SIZE=128,  # minibatch size
-        GAMMA=0.99,  # discount factor
-        LR_ACTOR=1e-3,  # learning rate of the actor
-        LR_CRITIC=1e-3,  # learning rate of the critic
-        WEIGHT_DECAY=0,  # L2 weight decay
+        TAU=1e-2,  # for soft update of target parameters
+        BUFFER_SIZE=int(1e5),  # replay buffer size
+        BATCH_SIZE=batch_size,  # minibatch size
+        GAMMA=discount_factor,  # discount factor
+        LR_ACTOR=5e-3,  # learning rate of the actor
+        LR_CRITIC=5e-3,  # learning rate of the critic
+        WEIGHT_DECAY=weight_decay,  # L2 weight decay
         UPDATE_EVERY=1,  # Number of actions before making a learning step
         action_noise="OU",  #
-        action_noise_scale=1,
+        action_noise_scale=0.5,
         weights_noise=None,  #
-        state_normalizer=None,  # "RunningMeanStd"
+        batch_normalization=None,  #
         warmup=0,  # Number of random actions to start with as a warm-up
         start_time=str(pd.Timestamp.utcnow()),
     )
@@ -228,7 +194,7 @@ if __name__ == "__main__":
     logger.setLevel(logging.INFO)
     skip_first = 0
     for batch_size in [64]:
-        for weight_decay in [0.0001, ]:
+        for weight_decay in [0.000001, ]:
             for discount_factor in [0.9,]:
                 if skip_first > 0:
                     skip_first -= 1
