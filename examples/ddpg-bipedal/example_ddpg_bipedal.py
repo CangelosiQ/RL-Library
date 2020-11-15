@@ -59,8 +59,8 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         save_path=f"./DDPG_Bipedal_{pd.Timestamp.utcnow().value}",
         mode="train",  # "train" or "test"
         evaluate_every=50,  # Number of training episodes before 1 evaluation episode
-        eps_decay=0.99,  # Epsilon decay rate
-        render=True,
+        eps_decay=0.9999,  # Epsilon decay rate
+        render=False,
 
         # Agent Parameters
         agent="DDPG",
@@ -77,11 +77,11 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
                       # 'max_epochs': n_episodes},
 
         TAU=1e-3,  # for soft update of target parameters
-        BUFFER_SIZE=int(1e5),  # replay buffer size
+        BUFFER_SIZE=int(1e6),  # replay buffer size
         BATCH_SIZE=128,  # minibatch size
         GAMMA=0.99,  # discount factor
         LR_ACTOR=1e-3,  # learning rate of the actor
-        LR_CRITIC=1e-4,  # learning rate of the critic
+        LR_CRITIC=1e-3,  # learning rate of the critic
         WEIGHT_DECAY=0,  # L2 weight decay
         UPDATE_EVERY=1,  # Number of actions before making a learning step
         action_noise="OU",  #
@@ -120,9 +120,6 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     env.run(agent)
 
     # env.play(agent)
-
-    with open(f"./{config['save_path']}/config.json", "w") as f:
-        json.dump(config, f)
 
 
 if __name__ == "__main__":

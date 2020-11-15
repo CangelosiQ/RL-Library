@@ -71,9 +71,6 @@ def main():
 
     # env.play(agent)
 
-    with open(f"./{config['save_path']}/config.json", "w") as f:
-        json.dump(config, f)
-
 
 if __name__ == "__main__":
     main()

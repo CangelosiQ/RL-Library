@@ -50,10 +50,10 @@ class SimpleNeuralNetHead(nn.Module):
         return x
 
     def reset_parameters(self):
-        for l in self.body.layers[:-1]:
+        for l in self.body.layers:
             l.weight.data.uniform_(*hidden_init(l))
 
-        self.body.layers[-1].weight.data.uniform_(-3e-3, 3e-3)
+        self.head.weight.data.uniform_(-3e-3, 3e-3)
 
 
 class DeepNeuralNetHeadCritic(nn.Module):

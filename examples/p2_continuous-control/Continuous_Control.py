@@ -29,7 +29,6 @@ TODO:
     - Reward Normalization
     - Try BatchNorm
     - Try leakyrelu
-    - Use baseline DDPG
     - use AdaptiveParamNoiseSpec
     - parameter noise
     - Double DDDPG? Rainbow DDPG?
@@ -77,7 +76,6 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     importlib.reload(unityagents)
     from unityagents import UnityEnvironment
 
-
     # ---------------------------------------------------------------------------------------------------
     #  Logger
     # ---------------------------------------------------------------------------------------------------
@@ -90,15 +88,11 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     #                     level=logging.INFO)
     logger = logging.getLogger()
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
-
     handler = logging.FileHandler(f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log")
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(formatter)
-    # stream_handler = logging.StreamHandler()
-    # stream_handler.setFormatter(formatter)
-
-    # logger.addHandler(stream_handler)
     logger.addHandler(handler)
+
     # ---------------------------------------------------------------------------------------------------
     #  Inputs
     # ---------------------------------------------------------------------------------------------------
@@ -163,6 +157,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # number of agents
     num_agents = len(env_info.agents)
     print('Number of agents:', num_agents)
+    config["n_agents"] = num_agents
 
     # size of each action
     action_size = brain.vector_action_space_size

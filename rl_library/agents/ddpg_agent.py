@@ -33,6 +33,14 @@ class DDPGAgent(BaseAgent):
         """
         super().__init__(state_size, action_size, config)
 
+        # General class parameters
+        self.action_space_low = action_space_low
+        self.action_space_high = action_space_high
+        self.avg_loss = [0, 0]  # actor, critic
+        self.training = True
+        self.n_agents = config.get("n_agents", 1)
+
+        # Hyper Parameters
         self.BUFFER_SIZE = config.get("BUFFER_SIZE", int(1e5))  # replay buffer size
         self.BATCH_SIZE = config.get("BATCH_SIZE", 128)  # minibatch size
         self.GAMMA = config.get("GAMMA", 0.99)  # discount factor
@@ -40,7 +48,10 @@ class DDPGAgent(BaseAgent):
         self.LR_ACTOR = config.get("LR_ACTOR", 1e-3)  # learning rate of the actor
         self.LR_CRITIC = config.get("LR_CRITIC", 1e-3)  # learning rate of the critic
         self.WEIGHT_DECAY = config.get("WEIGHT_DECAY", 0.001)  # L2 weight decay
-        self.UPDATE_EVERY = config.get("UPDATE_EVERY", 1)
+        self.UPDATE_EVERY = config.get("UPDATE_EVERY", 1)  # number of
+        # learning steps per environment step
+        self.N_CONSECUTIVE_LEARNING_STEPS = config.get("N_CONSECUTIVE_LEARNING_STEPS", 1)  # number of
+        # consecutive learning steps during one environment step
 
         # Actor Network (w/ Target Network)
         self.actor_local = model_actor.to(device)
@@ -50,37 +61,44 @@ class DDPGAgent(BaseAgent):
         self.critic_local = model_critic.to(device)
         self.critic_target = copy.deepcopy(model_critic).to(device)
 
+        # Optimizers
         self.set_optimizer(config.get("optimizer", "adam"))
 
+        # Learning Rate schedulers
         self.set_scheduler(config.get('lr_scheduler'))
 
+        # Normalizers
         self.init_normalizers(config=config)
+
+        # Noises
         self.init_noises(config=config)
 
         # Replay memory
         self.memory = ReplayBuffer(self.action_size, self.BUFFER_SIZE, self.BATCH_SIZE, self.random_seed)
-        self.action_space_low = action_space_low
-        self.action_space_high = action_space_high
-
-        self.avg_loss = [0, 0]  # actor, critic
-        self.training = True
 
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
         # logger.debug(f"State= {state}, Action={action}, Reward={reward}, done={done}")
 
         # For each agent, save experience / reward
-        for i in range(state.shape[0]):
+        if len(state.shape) > 1:
+            for i in range(state.shape[0]):
+                self.memory.add(state[i, :], action[i, :], reward[i], next_state[i, :], done[i])
+        else:
             self.memory.add(state, action, reward, next_state, done)
 
-        # Learn every UPDATE_EVERY time steps.
+        # Learn every UPDATE_EVERY time steps
+        # Start learning only once the number of steps of warm up have been executed
         self.t_step = (self.t_step + 1) % self.UPDATE_EVERY
         if self.t_step == 0 and self.warmup <= 0 and self.training:
             # Learn, if enough samples are available in memory
             if len(self.memory) > self.BATCH_SIZE:
-                experiences = self.memory.sample()
-                experiences = self.batch_normalization(experiences)
-                self.learn(experiences, self.GAMMA)
+                for _ in range(self.N_CONSECUTIVE_LEARNING_STEPS):
+                    experiences = self.memory.sample()
+                    experiences = self.batch_normalization(experiences)
+                    self.learn(experiences, self.GAMMA)
+
+        # Warming-up
         elif self.warmup > 0:
             self.warmup -= 1
             if self.warmup == 0:
@@ -100,11 +118,20 @@ class DDPGAgent(BaseAgent):
 
         return (states, actions, rewards, next_states, dones)
 
+    def warmup_action(self, state):
+        # Random action
+        if self.n_agents > 1:
+            action = [np.random.uniform(self.action_space_low, self.action_space_high) for _ in range(
+                self.n_agents)]
+        else:
+            action = np.random.uniform(self.action_space_low, self.action_space_high)
+        return action
+
     def act(self, state, eps: float = 0):
         """Returns actions for given state as per current policy."""
+        # Warm-up = Random action
         if self.warmup > 0:
-            # Random action
-            action = np.random.uniform(self.action_space_low, self.action_space_high)
+            action = self.warmup_action(state)
             return action
 
         if self.state_normalizer:
@@ -112,6 +139,7 @@ class DDPGAgent(BaseAgent):
                 state = self.state_normalizer(state)
             else:
                 state = self.state_normalizer(state, read_only=True)
+
         state = torch.from_numpy(state).float().to(device)
 
         self.actor_local.eval()
@@ -131,7 +159,9 @@ class DDPGAgent(BaseAgent):
             #             l.weight.data += random_noise
 
             # print(f"after {np.mean(l.weight.data.numpy())}")
+            # action = [self.actor_local(state).cpu().data.numpy() for _ in range(self.n_agents)]
             action = self.actor_local(state).cpu().data.numpy()
+
             # if add_noise and self.t_step == 0:
             #     for l, noise in zip(self.actor_local.body.layers, self.parameter_noise):
             #         if l in previous_weights:
@@ -140,12 +170,14 @@ class DDPGAgent(BaseAgent):
         # logger.debug(f"State= {state}, Action={action}")
 
         if self.action_noise is not None and self.training:
+            # noise = [eps * self.action_noise.sample() for _ in range(self.n_agents)]
             noise = self.action_noise.sample()
-            # noise = 2*np.random.random(action.shape) - 1
             action += eps * noise
             # logger.debug(f"Noisy Action={action} Noise={noise}")
         action = np.clip(action, self.action_space_low, self.action_space_high)
         # logger.debug(f"Clipped Action: {action}")
+        # if self.n_agents == 1:
+        #     action = action[0]
 
         self.actor_local.train()
         return action
@@ -249,7 +281,7 @@ class DDPGAgent(BaseAgent):
             scheduler_type = config.get("scheduler_type")
             step_size = config.get("step_size", 1)
             gamma = config.get("gamma", 0.9)
-            max_epochs= config.get("max_epochs", -1)
+            max_epochs = config.get("max_epochs", -1)
             verbose = config.get("verbose", True)
             milestones = config.get("milestones", [50 * i for i in range(1, 6)])
 
@@ -269,10 +301,12 @@ class DDPGAgent(BaseAgent):
                 self.critic_scheduler = lr_scheduler.LambdaLR(self.critic_optimizer, [_decay(max_epochs, gamma)], )
             elif scheduler_type == 'plateau':
                 self.actor_scheduler = lr_scheduler.ReduceLROnPlateau(self.actor_optimizer, mode='min', factor=0.1,
-                                                                      patience=100, threshold=0.0001, threshold_mode='rel',
+                                                                      patience=100, threshold=0.0001,
+                                                                      threshold_mode='rel',
                                                                       cooldown=0, min_lr=0, eps=1e-08, verbose=verbose)
                 self.critic_scheduler = lr_scheduler.ReduceLROnPlateau(self.critic_optimizer, mode='min', factor=0.1,
-                                                                       patience=100, threshold=0.0001, threshold_mode='rel',
+                                                                       patience=100, threshold=0.0001,
+                                                                       threshold_mode='rel',
                                                                        cooldown=0, min_lr=0, eps=1e-08, verbose=verbose)
 
             elif scheduler_type == 'multistep':
@@ -328,11 +362,16 @@ class DDPGAgent(BaseAgent):
         logger.info(f"Initiated state_normalizer={self.state_normalizer}, reward_normalizer={self.reward_normalizer}")
 
     def init_noises(self, config):
+        if self.n_agents >1:
+            size = (self.n_agents, self.action_size)
+        else:
+            size = (self.action_size, )
+
         # Noise process
         if "action_noise" in config:
             if config["action_noise"] == "OU":
-                self.action_noise = OUNoise(self.action_size, self.random_seed, scale=config.get(
-                    "action_noise_scale", 1))
+
+                self.action_noise = OUNoise(size, self.random_seed, scale=config.get("action_noise_scale", 1))
             else:
                 logger.warning(f"action_noise {config['action_noise']} not understood.")
                 self.action_noise = None

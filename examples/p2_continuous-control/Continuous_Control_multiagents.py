@@ -14,6 +14,7 @@ Notes:
     course when the agent is far away it needs to know which suite of actions will get him back to the ball direction.
 
 TODO:
+    - Change noise to be for all agents
     - Reward Normalization
     - Try BatchNorm
     - Try leakyrelu
@@ -48,12 +49,11 @@ import torch.nn.functional as F
 
 np.random.seed(42)
 torch.manual_seed(42)
-import importlib
 
 # ---------------------------------------------------------------------------------------------------
 #  Internal Dependencies
 # ---------------------------------------------------------------------------------------------------
-import unityagents
+from unityagents import UnityEnvironment
 from rl_library.agents.ddpg_agent import DDPGAgent
 from rl_library.agents.models.bodies import SimpleNeuralNetBody
 from rl_library.agents.models.heads import SimpleNeuralNetHead, DeepNeuralNetHeadCritic
@@ -62,10 +62,6 @@ from rl_library.monitors.unity_monitor import UnityMonitor
 
 
 def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
-    importlib.reload(unityagents)
-    from unityagents import UnityEnvironment
-
-
     # ---------------------------------------------------------------------------------------------------
     #  Logger
     # ---------------------------------------------------------------------------------------------------
@@ -104,31 +100,32 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
 
         # Agent Parameters
         agent="DDPG",
-        hidden_layers_actor=(40, 30, 20),  #
-        hidden_layers_critic_body=(40,),  #
-        hidden_layers_critic_head=(30, 20),  #
+        hidden_layers_actor=(200, 150),  #
+        hidden_layers_critic_body=(400,),  #
+        hidden_layers_critic_head=(300,),  #
         func_critic_body="F.relu",  #
         func_critic_head="F.relu",  #
         func_actor_body="F.relu",  #
-        lr_scheduler={'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
-                      'gamma': 0.5,  # 0.99999,
-                      'step_size': 1,
-                      'milestones': [25*1000 * i for i in range(1, 6)],
-                      'max_epochs': n_episodes},
+        lr_scheduler=None,
+        # {'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
+        #                   'gamma': 0.5,  # 0.99999,
+        #                   'step_size': 1,
+        #                   'milestones': [10*1000 * i for i in range(1, 6)],
+        #                   'max_epochs': n_episodes},
 
-        TAU=5e-3,  # for soft update of target parameters
-        BUFFER_SIZE=int(1e5),  # replay buffer size
-        BATCH_SIZE=batch_size,  # minibatch size
-        GAMMA=discount_factor,  # discount factor
-        LR_ACTOR=5e-3,  # learning rate of the actor
-        LR_CRITIC=5e-3,  # learning rate of the critic
-        WEIGHT_DECAY=weight_decay,  # L2 weight decay
-        UPDATE_EVERY=10,  # Number of actions before making a learning step
+        TAU=1e-3,  # for soft update of target parameters
+        BUFFER_SIZE=int(1e6),  # replay buffer size
+        BATCH_SIZE=128,  # minibatch size
+        GAMMA=0.99,  # discount factor
+        LR_ACTOR=1e-3,  # learning rate of the actor
+        LR_CRITIC=1e-3,  # learning rate of the critic
+        WEIGHT_DECAY=0,  # L2 weight decay
+        UPDATE_EVERY=1,  # Number of actions before making a learning step
         action_noise="OU",  #
-        action_noise_scale=0.01,
+        action_noise_scale=1,
         weights_noise=None,  #
-        state_normalizer="RunningMeanStd",  #
-        warmup=1e4,  # Number of random actions to start with as a warm-up
+        state_normalizer=None,  # "RunningMeanStd"
+        warmup=0,  # Number of random actions to start with as a warm-up
         start_time=str(pd.Timestamp.utcnow()),
     )
 
@@ -217,12 +214,12 @@ if __name__ == "__main__":
     skip_first = 0
     for batch_size in [64]:
         for weight_decay in [0.000001, ]:
-            for discount_factor in [0.9,]:
+            for discount_factor in [0.9, ]:
                 if skip_first > 0:
                     skip_first -= 1
                     continue
-                logger.warning("+="*90)
+                logger.warning("+=" * 90)
                 logger.warning(f"  RUNNING SIMULATION WITH PARAMETERS discount_factor={discount_factor}, "
                                f"weight_decay={weight_decay}, batch_size={batch_size}")
-                logger.warning("+="*90)
+                logger.warning("+=" * 90)
                 main(discount_factor=discount_factor, weight_decay=weight_decay, batch_size=batch_size)

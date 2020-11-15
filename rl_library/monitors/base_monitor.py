@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import os, pickle
 
+from rl_library.utils.utils import NpEncoder
 from rl_library.utils.visualization import plot_scores
 
 logger = logging.getLogger("rllib.monitor")
@@ -47,16 +48,17 @@ class Monitor:
         # If evaluate_every is not None, then the balancing Exploration and exploitation
         self.evaluate_every = config.get("evaluate_every")
         self.start = pd.Timestamp.utcnow()
+        self.n_agents = config.get("n_agents", 1)
 
     def reset(self):
         state = self.reset_env()
         last_actions = deque(maxlen=100)
         last_states = deque(maxlen=100)
-        score = 0
-        actions = []
-        rewards = []
-        states = [state]
-        return state, states, rewards, actions, score, last_states, last_actions
+        scores = np.zeros(self.n_agents)
+        list_actions = []
+        list_rewards = []
+        list_states = [state]
+        return state, list_states, list_rewards, list_actions, scores, last_states, last_actions
 
     def reset_env(self):
         raise NotImplementedError
@@ -71,20 +73,22 @@ class Monitor:
         #  1. Initialization
         # ------------------------------------------------------------
         # reset the environment
-        scores = []  # list containing scores from each episode
+        scores_history = []  # list containing scores from each episode
         solved = False
         if self.reload_path is not None and os.path.exists(self.reload_path + "/checkpoint.pth"):
             logger.info(f"Reloading session from {self.reload_path}")
             with open(self.reload_path + "/scores.pickle", "rb") as f:
-                scores = pickle.load(f)
+                scores_history = pickle.load(f)
 
-        scores_window = deque(maxlen=100)  # last 100 scores
+        scores_window = deque(maxlen=100) # last 100 scores
         self.evaluation_scores = []
         eps = self.eps_start  # initialize epsilon
         eps_backup = eps
         t = None
         for i_episode in range(1, self.n_episodes + 1):
-            state, states, rewards, actions, score, last_states, last_actions = self.reset()
+            # list_states, list_rewards, list_actions are in the case where agents are updated once at the end of an
+            # episode
+            state, list_states, list_rewards, list_actions, scores, last_states, last_actions = self.reset()
             agent.reset()  # Reset Noise Random Process
 
             # Turn ON Evaluation Episode
@@ -97,7 +101,6 @@ class Monitor:
 
                 # print(f"\rAction: {action} Processed: {self.process_action(action)}", end="")
                 next_state, reward, done, _ = self.env_step(self.process_action(action))  # send the action to the
-
                 # last_actions.append(action)
                 # last_states.append(state)
                 # if len(last_actions) == 100:
@@ -117,37 +120,39 @@ class Monitor:
 
                 # We are going to update the agent only after the end of the episode
                 elif self.mode == "train":
-                    actions.append(action)
-                    states.append(next_state)
-                    rewards.append(reward)
+                    list_actions.append(action)
+                    list_states.append(next_state)
+                    list_rewards.append(reward)
 
                 state = next_state
-                score += reward
-                if done:
+                scores += reward
+
+                done = [done,] if type(done) is not list else done
+                if any(done):
                     break
 
             # Turn OFF
             if self.evaluate_every is not None and i_episode % self.evaluate_every == 0:
-                self.evaluation_scores.append(score)  # save most recent score
-                logger.warning(f"Average Evaluation Score: {np.mean(self.evaluation_scores):.2f}, Last Score: {score}")
+                self.evaluation_scores.append(scores)  # save most recent score
+                logger.warning(f"Average Evaluation Score: {np.mean(self.evaluation_scores):.2f}, Last Score: {scores}")
                 agent.training = True
                 logger.warning("Evaluation episode DEACTIVATED")
             else:
                 if self.mode == "train" and not agent.step_every_action:
-                    agent.step(states, actions, rewards)
+                    agent.step(list_states, list_actions, list_rewards)
 
-            scores_window.append(score)  # save most recent score
-            scores.append(score)  # save most recent score
+            scores_window.append(scores)  # save most recent score
+            scores_history.append(scores)  # save most recent score
             eps = max(self.eps_end, self.eps_decay * eps)  # decrease epsilon
-            solved = self.logging(i_episode, scores_window, score, eps, solved, agent, t)
+            solved = self.logging(i_episode, scores_window, scores, eps, solved, agent, t)
 
-            self.intermediate_save( i_episode, scores, agent, save_prefix)
+            self.intermediate_save( i_episode, scores_history, agent, save_prefix)
 
-        self.save_and_plot(scores, agent, save_prefix)
+        self.save_and_plot(scores_history, agent, save_prefix)
 
         te = pd.Timestamp.utcnow()
         logger.info(f"Elapsed Time: {pd.Timedelta(te - ts)}")
-        return scores
+        return scores_history
 
     def logging(self, i_episode, scores_window, score, eps, solved, agent, n_steps):
         self.agent_losses.append(agent.avg_loss)
@@ -158,7 +163,7 @@ class Monitor:
             mean_loss = np.mean(np.array(self.agent_losses[:-100]), axis=0)
 
         log = f'Episode {i_episode}    Average Score: {np.mean(scores_window):.2f}, Agent Loss: ' \
-              f'{mean_loss}, Last Score: {score:.2f} ' \
+              f'{mean_loss}, Last Score: avg={np.mean(score):.2f}, min={min(score):.2f}, max={max(score):.2f} ' \
               f'({n_steps} ' \
               f'steps), ' \
               f'eps: {eps:.2f}'
@@ -193,19 +198,19 @@ class Monitor:
     def save_config(self, scores, i_episode=None):
         self.config["current_episode"] = i_episode
         self.config["training_scores"] = scores
-        self.config["best_training_score"] = max(scores)
-        self.config["avg_training_score"] = np.mean(scores)
+        self.config["best_training_score"] = np.max(np.mean(np.array(scores), axis=1))
+        self.config["avg_training_score"] = np.mean(np.mean(np.array(scores), axis=1))
 
         self.config["eval_scores"] = self.evaluation_scores
-        self.config["best_eval_score"] = max(self.evaluation_scores)
-        self.config["avg_eval_score"] = np.mean(self.evaluation_scores)
+        self.config["best_eval_score"] = np.max(np.mean(np.array(self.evaluation_scores), axis=1))
+        self.config["avg_eval_score"] = np.mean(np.mean(np.array(self.evaluation_scores), axis=1))
 
         if len(scores) > 50:
             self.config["last_50_score"] = np.mean(scores[:-50])
 
         self.config["elapsed_time"] = pd.Timedelta(pd.Timestamp.utcnow() - self.start).total_seconds()
         with open(f"./{self.config['save_path']}/config.json", "w") as f:
-            json.dump(self.config, f)
+            json.dump(self.config, f, cls=NpEncoder)
 
     def save_and_plot(self, scores, agent, save_prefix):
         if self.save_path and self.mode == "train":
@@ -223,7 +228,6 @@ class Monitor:
             self.save_config(scores)
         elif self.mode == "test":
             plot_scores(scores, path=".", threshold=self.threshold, prefix=save_prefix)
-
 
     def play(self, agent):
         state = self.reset()
