@@ -1,9 +1,9 @@
-import matplotlib
-import matplotlib.pyplot as plt
+import os
 import pandas as pd
 import numpy as np
-import os
+import matplotlib
 matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 # Following line seemed to solve issue on MacOS due to probably conflict between gym environment and matplotlib
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 

@@ -173,6 +173,9 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # ------------------------------------------------------------
     #  2. Training
     # ------------------------------------------------------------
+    # Unity Monitor
+    monitor = UnityMonitor(env=env, config=config)
+
     if config["mode"] == "train":
         # Actor model
         actor = SimpleNeuralNetHead(action_size, SimpleNeuralNetBody(state_size, config["hidden_layers_actor"]),
@@ -188,12 +191,8 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         # DDPG Agent
         agent = DDPGAgent(state_size=state_size, action_size=action_size,
                           model_actor=actor, model_critic=critic,
-                          action_space_low=[-1, ] * action_size, action_space_high=[1, ] * action_size,
-                          config=config,
+                          action_space_low=-1, action_space_high=1, config=config,
                           )
-
-        # Unity Monitor
-        monitor = UnityMonitor(env=env, config=config)
 
         # Training
         start = pd.Timestamp.utcnow()
@@ -207,7 +206,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # ------------------------------------------------------------
     else:
         agent = DDPGAgent.load(filepath=config['save_path'], mode="test")
-        scores = unity_monitor.run(env, agent, brain_name, n_episodes=10, length_episode=1e6, mode="test")
+        scores = monitor.run(env, agent, brain_name, n_episodes=10, length_episode=1e6, mode="test")
         logger.info(f"Test Score over {len(scores)} episodes: {np.mean(scores)}")
         config["test_scores"] = scores
         config["best_test_score"] = max(scores)

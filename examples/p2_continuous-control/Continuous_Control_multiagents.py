@@ -14,6 +14,7 @@ Notes:
     course when the agent is far away it needs to know which suite of actions will get him back to the ball direction.
 
 TODO:
+    - F.tanh(
     - Change noise to be for all agents
     - Reward Normalization
     - Try BatchNorm
@@ -26,7 +27,6 @@ TODO:
     - different learning rate decay
     - multi agent
     - Check that GPU is used on Linux
-
 
 """
 
@@ -43,12 +43,11 @@ import os
 import pandas as pd
 from pathlib import Path
 import torch
-import json
-import sys
 import torch.nn.functional as F
 
-np.random.seed(42)
-torch.manual_seed(42)
+# seed = 0
+# np.random.seed(seed)
+# torch.manual_seed(seed)
 
 # ---------------------------------------------------------------------------------------------------
 #  Internal Dependencies
@@ -95,7 +94,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         save_every=100,
         save_path=save_path,
         mode="train",  # "train" or "test"
-        evaluate_every=50,  # Number of training episodes before 1 evaluation episode
+        evaluate_every=5000,  # Number of training episodes before 1 evaluation episode
         eps_decay=1,  # Epsilon decay rate
 
         # Agent Parameters
@@ -127,6 +126,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         state_normalizer=None,  # "RunningMeanStd"
         warmup=0,  # Number of random actions to start with as a warm-up
         start_time=str(pd.Timestamp.utcnow()),
+        # random_seed=seed
     )
 
     # ------------------------------------------------------------
@@ -163,27 +163,41 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # ------------------------------------------------------------
     #  2. Training
     # ------------------------------------------------------------
+    # Unity Monitor
+    monitor = UnityMonitor(env=env, config=config)
+
     if config["mode"] == "train":
         # Actor model
-        actor = SimpleNeuralNetHead(action_size, SimpleNeuralNetBody(state_size, config["hidden_layers_actor"]),
-                                    func=torch.tanh)
+        seed = 0
+        actor = SimpleNeuralNetHead(action_size,
+                                    SimpleNeuralNetBody(state_size, config["hidden_layers_actor"], seed=seed),
+                                    func=F.tanh, seed=seed)
+        actor_target = SimpleNeuralNetHead(action_size,
+                                           SimpleNeuralNetBody(state_size, config["hidden_layers_actor"], seed=seed),
+                                           func=F.tanh, seed=seed)
         # Critic model
         critic = DeepNeuralNetHeadCritic(action_size,
                                          SimpleNeuralNetBody(state_size, config["hidden_layers_critic_body"],
-                                                             func=eval(config["func_critic_body"])),
+                                                             func=eval(config["func_critic_body"]), seed=seed),
                                          hidden_layers_sizes=config["hidden_layers_critic_head"],
                                          func=eval(config["func_critic_head"]),
-                                         end_func=None)
+                                         end_func=None, seed=seed)
+
+        critic_target = DeepNeuralNetHeadCritic(action_size,
+                                                SimpleNeuralNetBody(state_size, config["hidden_layers_critic_body"],
+                                                                    func=eval(config["func_critic_body"]), seed=seed),
+                                                hidden_layers_sizes=config["hidden_layers_critic_head"],
+                                                func=eval(config["func_critic_head"]),
+                                                end_func=None, seed=seed)
 
         # DDPG Agent
         agent = DDPGAgent(state_size=state_size, action_size=action_size,
                           model_actor=actor, model_critic=critic,
-                          action_space_low=[-1, ] * action_size, action_space_high=[1, ] * action_size,
+                          actor_target=actor_target, critic_target=critic_target,
+                          action_space_low=-1, action_space_high=1,
                           config=config,
                           )
 
-        # Unity Monitor
-        monitor = UnityMonitor(env=env, config=config)
 
         # Training
         start = pd.Timestamp.utcnow()
@@ -197,7 +211,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # ------------------------------------------------------------
     else:
         agent = DDPGAgent.load(filepath=config['save_path'], mode="test")
-        scores = unity_monitor.run(env, agent, brain_name, n_episodes=10, length_episode=1e6, mode="test")
+        scores = monitor.run(env, agent, brain_name, n_episodes=10, length_episode=1e6, mode="test")
         logger.info(f"Test Score over {len(scores)} episodes: {np.mean(scores)}")
         config["test_scores"] = scores
         config["best_test_score"] = max(scores)

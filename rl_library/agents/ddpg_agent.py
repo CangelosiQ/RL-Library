@@ -1,3 +1,5 @@
+from collections import deque
+
 import numpy as np
 import random
 import copy
@@ -22,7 +24,8 @@ class DDPGAgent(BaseAgent):
 
     def __init__(self, state_size, action_size, config: dict,
                  model_actor: nn.Module, model_critic: nn.Module,
-                 action_space_high, action_space_low):
+                 actor_target: nn.Module, critic_target: nn.Module,
+                 action_space_high, action_space_low, debug_mode=True):
         """Initialize an Agent object.
         
         Params
@@ -36,9 +39,13 @@ class DDPGAgent(BaseAgent):
         # General class parameters
         self.action_space_low = action_space_low
         self.action_space_high = action_space_high
+        self.losses = deque(maxlen=int(1e3))  # actor, critic
         self.avg_loss = [0, 0]  # actor, critic
         self.training = True
         self.n_agents = config.get("n_agents", 1)
+        self.debug_mode = debug_mode
+        self.debug_freq = 4200
+        self.debug_it = 1
 
         # Hyper Parameters
         self.BUFFER_SIZE = config.get("BUFFER_SIZE", int(1e5))  # replay buffer size
@@ -55,11 +62,11 @@ class DDPGAgent(BaseAgent):
 
         # Actor Network (w/ Target Network)
         self.actor_local = model_actor.to(device)
-        self.actor_target = copy.deepcopy(model_actor).to(device)
+        self.actor_target = actor_target.to(device)  # copy.deepcopy(model_actor).to(device)
 
         # Critic Network (w/ Target Network)
         self.critic_local = model_critic.to(device)
-        self.critic_target = copy.deepcopy(model_critic).to(device)
+        self.critic_target = critic_target.to(device)  #copy.deepcopy(model_critic).to(device)
 
         # Optimizers
         self.set_optimizer(config.get("optimizer", "adam"))
@@ -95,7 +102,7 @@ class DDPGAgent(BaseAgent):
             if len(self.memory) > self.BATCH_SIZE:
                 for _ in range(self.N_CONSECUTIVE_LEARNING_STEPS):
                     experiences = self.memory.sample()
-                    experiences = self.batch_normalization(experiences)
+                    # experiences = self.batch_normalization(experiences)
                     self.learn(experiences, self.GAMMA)
 
         # Warming-up
@@ -103,6 +110,10 @@ class DDPGAgent(BaseAgent):
             self.warmup -= 1
             if self.warmup == 0:
                 logger.info(f"End of warm up after {len(self.memory)} steps.")
+
+        # Debug mode (activating more logs)
+        if self.debug_mode:
+            self.debug_it = (self.debug_it + 1) % self.debug_freq
 
     def batch_normalization(self, experiences):
         states, actions, rewards, next_states, dones = experiences
@@ -161,21 +172,31 @@ class DDPGAgent(BaseAgent):
             # print(f"after {np.mean(l.weight.data.numpy())}")
             # action = [self.actor_local(state).cpu().data.numpy() for _ in range(self.n_agents)]
             action = self.actor_local(state).cpu().data.numpy()
+            if self.debug_mode and self.debug_it % self.debug_freq == 0:
+                logger.info(f"DEBUG: act()")
+                logger.info(f"State= {state}")
+                logger.info(f"Action={action}")
 
             # if add_noise and self.t_step == 0:
             #     for l, noise in zip(self.actor_local.body.layers, self.parameter_noise):
             #         if l in previous_weights:
             #             l.weight.data = previous_weights[l]
 
-        # logger.debug(f"State= {state}, Action={action}")
-
         if self.action_noise is not None and self.training:
-            # noise = [eps * self.action_noise.sample() for _ in range(self.n_agents)]
-            noise = self.action_noise.sample()
-            action += eps * noise
-            # logger.debug(f"Noisy Action={action} Noise={noise}")
+            if self.n_agents>1:
+                noise = np.array([eps * self.action_noise[i].sample() for i in range(self.n_agents)])
+            else:
+                noise = self.action_noise[0].sample()
+
+            action += noise
+            if self.debug_mode and self.debug_it % self.debug_freq == 0:
+                logger.info(f"Noise={noise}")
+                logger.info(f"Noisy Action= {action}")
+
         action = np.clip(action, self.action_space_low, self.action_space_high)
-        # logger.debug(f"Clipped Action: {action}")
+        if self.debug_mode and self.debug_it % self.debug_freq == 0:
+            logger.info(f"Clipped Action: {action}")
+
         # if self.n_agents == 1:
         #     action = action[0]
 
@@ -184,7 +205,8 @@ class DDPGAgent(BaseAgent):
 
     def reset(self):
         if self.action_noise:
-            self.action_noise.reset()
+            for noise in self.action_noise:
+                noise.reset()
         if self.parameter_noise:
             self.parameter_noise.reset()
 
@@ -217,7 +239,7 @@ class DDPGAgent(BaseAgent):
         # Minimize the loss
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
+        # torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
         self.critic_optimizer.step()
 
         # ---------------------------- update actor ---------------------------- #
@@ -227,9 +249,10 @@ class DDPGAgent(BaseAgent):
         # Minimize the loss
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.actor_local.parameters(), 1)
+        # torch.nn.utils.clip_grad_norm_(self.actor_local.parameters(), 1)
         self.actor_optimizer.step()
-        self.avg_loss = [float(actor_loss), float(critic_loss)]
+        self.losses.append([float(actor_loss), float(critic_loss)])
+        self.avg_loss = np.mean(np.array(self.losses), axis=0)
 
         # ----------------------- update target networks ----------------------- #
         self.soft_update(self.critic_local, self.critic_target)
@@ -243,6 +266,23 @@ class DDPGAgent(BaseAgent):
             self.actor_scheduler.step()
         if self.critic_scheduler is not None:
             self.critic_scheduler.step()
+
+        if self.debug_mode and self.debug_it % self.debug_freq == 0:
+            logger.info(f"DEBUG: {self.debug_it}")
+            logger.info(f"states={states}")
+            logger.info(f"actions={actions}")
+            logger.info(f"next_states={next_states}")
+            logger.info(f"actions_next={actions_next}")
+            logger.info(f"Q_targets_next={Q_targets_next}")
+            logger.info(f"Q_expected={Q_expected}")
+            logger.info(f"critic_loss={critic_loss}")
+            logger.info(f"actions_pred={actions_pred}")
+            logger.info(f"actor_loss={actor_loss}")
+            logger.info(f"self.critic_local(states, actions_pred)={self.critic_local(states, actions_pred)}")
+            logger.info(f"self.critic_local={self.critic_local}")
+            logger.info(f"self.critic_target={self.critic_target}")
+            logger.info(f"self.actor_local={self.actor_local}")
+            logger.info(f"self.actor_target={self.actor_target}")
 
     def soft_update(self, local_model, target_model):
         """Soft update model parameters.
@@ -362,16 +402,16 @@ class DDPGAgent(BaseAgent):
         logger.info(f"Initiated state_normalizer={self.state_normalizer}, reward_normalizer={self.reward_normalizer}")
 
     def init_noises(self, config):
-        if self.n_agents >1:
-            size = (self.n_agents, self.action_size)
-        else:
-            size = (self.action_size, )
+        # if self.n_agents >1:
+        #     size = (self.n_agents, self.action_size)
+        # else:
+        size = (self.action_size, )
 
         # Noise process
         if "action_noise" in config:
             if config["action_noise"] == "OU":
-
-                self.action_noise = OUNoise(size, self.random_seed, scale=config.get("action_noise_scale", 1))
+                self.action_noise = [OUNoise(size, self.seed*i, scale=config.get("action_noise_scale",
+                                                                                      1)) for i in range(self.n_agents)]
             else:
                 logger.warning(f"action_noise {config['action_noise']} not understood.")
                 self.action_noise = None

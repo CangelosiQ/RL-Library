@@ -60,29 +60,29 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         mode="train",  # "train" or "test"
         evaluate_every=50,  # Number of training episodes before 1 evaluation episode
         eps_decay=0.9999,  # Epsilon decay rate
-        render=False,
+        render=True,
 
         # Agent Parameters
         agent="DDPG",
         hidden_layers_actor=(256, 128),  #
         hidden_layers_critic_body=(256,),  #
-        hidden_layers_critic_head=(256, 128),  #
+        hidden_layers_critic_head=(128,),  #
         func_critic_body="F.relu",  #
         func_critic_head="F.relu",  #
         func_actor_body="F.relu",  #
-        lr_scheduler=None,#{'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
-                      # 'gamma': 0.5,  # 0.99999,
-                      # 'step_size': 1,
-                      # 'milestones': [25*1000 * i for i in range(1, 6)],
-                      # 'max_epochs': n_episodes},
+        lr_scheduler={'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
+                      'gamma': 0.5,  # 0.99999,
+                      'step_size': 1,
+                      'milestones': [25*1000 * i for i in range(1, 6)],
+                      'max_epochs': n_episodes},
 
         TAU=1e-3,  # for soft update of target parameters
         BUFFER_SIZE=int(1e6),  # replay buffer size
         BATCH_SIZE=128,  # minibatch size
         GAMMA=0.99,  # discount factor
-        LR_ACTOR=1e-3,  # learning rate of the actor
-        LR_CRITIC=1e-3,  # learning rate of the critic
-        WEIGHT_DECAY=0,  # L2 weight decay
+        LR_ACTOR=1e-4,  # learning rate of the actor
+        LR_CRITIC=3e-4,  # learning rate of the critic
+        WEIGHT_DECAY=0.001,  # L2 weight decay
         UPDATE_EVERY=1,  # Number of actions before making a learning step
         action_noise="OU",  #
         action_noise_scale=1,
@@ -100,9 +100,18 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
 
     # Actor model
     actor = SimpleNeuralNetHead(env.action_size, SimpleNeuralNetBody(env.state_size, config["hidden_layers_actor"]),
-                                func=torch.tanh)
+                                func=F.tanh)
+    actor_target = SimpleNeuralNetHead(env.action_size, SimpleNeuralNetBody(env.state_size,
+                                                                          config["hidden_layers_actor"]),
+                                func=F.tanh)
     # Critic model
     critic = DeepNeuralNetHeadCritic(env.action_size,
+                                     SimpleNeuralNetBody(env.state_size, config["hidden_layers_critic_body"],
+                                                         func=eval(config["func_critic_body"])),
+                                     hidden_layers_sizes=config["hidden_layers_critic_head"],
+                                     func=eval(config["func_critic_head"]),
+                                     end_func=None)
+    critic_target = DeepNeuralNetHeadCritic(env.action_size,
                                      SimpleNeuralNetBody(env.state_size, config["hidden_layers_critic_body"],
                                                          func=eval(config["func_critic_body"])),
                                      hidden_layers_sizes=config["hidden_layers_critic_head"],
@@ -112,7 +121,8 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # DDPG Agent
     agent = DDPGAgent(state_size=env.state_size, action_size=env.action_size,
                       model_actor=actor, model_critic=critic,
-                      action_space_low=[-1, ] * env.action_size, action_space_high=[1, ] * env.action_size,
+                      actor_target=actor_target, critic_target=critic_target,
+                      action_space_low=-1, action_space_high=1,
                       config=config,
                       )
 

@@ -83,7 +83,6 @@ class Monitor:
         scores_window = deque(maxlen=100) # last 100 scores
         self.evaluation_scores = []
         eps = self.eps_start  # initialize epsilon
-        eps_backup = eps
         t = None
         for i_episode in range(1, self.n_episodes + 1):
             # list_states, list_rewards, list_actions are in the case where agents are updated once at the end of an
@@ -133,8 +132,9 @@ class Monitor:
 
             # Turn OFF
             if self.evaluate_every is not None and i_episode % self.evaluate_every == 0:
-                self.evaluation_scores.append(scores)  # save most recent score
-                logger.warning(f"Average Evaluation Score: {np.mean(self.evaluation_scores):.2f}, Last Score: {scores}")
+                self.evaluation_scores.append(np.mean(scores))  # save most recent score
+                logger.warning(f"Average Evaluation Score: {np.mean(self.evaluation_scores):.2f}, Last Score: "
+                               f"{np.mean(scores)}")
                 agent.training = True
                 logger.warning("Evaluation episode DEACTIVATED")
             else:
@@ -188,9 +188,12 @@ class Monitor:
             with open(self.save_path + "/scores.pickle", "wb") as f:
                 pickle.dump(scores, f)
             if not self.render:
-                plot_scores(scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix)
-                plot_scores(self.evaluation_scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix + '_evaluation')
-                plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss', log=True)
+                plot_scores(list(np.mean(scores, axis=0)), path=self.save_path, threshold=self.threshold,
+                            prefix=save_prefix)
+                if len(self.evaluation_scores)>0:
+                    plot_scores(self.evaluation_scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix + '_evaluation')
+                plot_scores(np.array(self.agent_losses).transpose(), path=self.save_path, prefix=save_prefix + '_agent_loss',
+                            log=True)
 
             # Save config
             self.save_config(scores, i_episode)
@@ -200,10 +203,10 @@ class Monitor:
         self.config["training_scores"] = scores
         self.config["best_training_score"] = np.max(np.mean(np.array(scores), axis=1))
         self.config["avg_training_score"] = np.mean(np.mean(np.array(scores), axis=1))
-
-        self.config["eval_scores"] = self.evaluation_scores
-        self.config["best_eval_score"] = np.max(np.mean(np.array(self.evaluation_scores), axis=1))
-        self.config["avg_eval_score"] = np.mean(np.mean(np.array(self.evaluation_scores), axis=1))
+        if len(self.evaluation_scores) > 0:
+            self.config["eval_scores"] = self.evaluation_scores
+            self.config["best_eval_score"] = np.max(self.evaluation_scores)
+            self.config["avg_eval_score"] = np.mean(self.evaluation_scores)
 
         if len(scores) > 50:
             self.config["last_50_score"] = np.mean(scores[:-50])

@@ -5,16 +5,17 @@ import numpy as np
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
 def hidden_init(layer):
     fan_in = layer.weight.data.size()[0]
     lim = 1. / np.sqrt(fan_in)
-    return (-lim, lim)
+    return -lim, lim
 
 
 class SimpleNeuralNetBody(nn.Module):
     """Actor (Policy) Model."""
 
-    def __init__(self, state_size, hidden_layers_sizes: tuple = (10, ), func= F.relu, seed=42):
+    def __init__(self, state_size, hidden_layers_sizes: tuple = (10,), func=F.relu, seed=42):
         """Initialize parameters and build model.
         Params
         ======
@@ -36,6 +37,3 @@ class SimpleNeuralNetBody(nn.Module):
         for layer in self.layers:
             x = self.func(layer(x)).to(device)
         return x
-
-
-
