@@ -436,7 +436,7 @@ class DDPGAgent(BaseAgent):
         checkpoint = {
             'state_size': self.state_size,
             'action_size': self.action_size,
-            'hidden_layers_sizes': self.hidden_layers_sizes,
+            'config': self.config,
             'state_dict_actor_local': self.actor_local.state_dict(),
             'state_dict_actor_target': self.actor_target.state_dict(),
             'state_dict_critic_local': self.critic_local.state_dict(),

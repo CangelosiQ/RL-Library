@@ -56,7 +56,6 @@ from unityagents import UnityEnvironment
 from rl_library.agents.ddpg_agent import DDPGAgent
 from rl_library.agents.models.bodies import SimpleNeuralNetBody
 from rl_library.agents.models.heads import SimpleNeuralNetHead, DeepNeuralNetHeadCritic
-from rl_library.monitors import unity_monitor
 from rl_library.monitors.unity_monitor import UnityMonitor
 
 
@@ -130,8 +129,8 @@ def main(seed=seed):
     # ------------------------------------------------------------
     # 1. Start the Environment
 
-    # env = UnityEnvironment(file_name=f'./Reacher_Linux/Reacher.x86_64')  # Linux
-    env = UnityEnvironment(file_name=f'./{config["env_name"]}')  # mac OS
+    env = UnityEnvironment(file_name=f'./Reacher_Linux_2/Reacher.x86_64')  # Linux
+    # env = UnityEnvironment(file_name=f'./{config["env_name"]}')  # mac OS
 
     # get the default brain
     brain_name = env.brain_names[0]
