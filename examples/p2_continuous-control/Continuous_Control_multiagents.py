@@ -45,9 +45,9 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
-# seed = 0
-# np.random.seed(seed)
-# torch.manual_seed(seed)
+seed = 42
+np.random.seed(seed)
+torch.manual_seed(seed)
 
 # ---------------------------------------------------------------------------------------------------
 #  Internal Dependencies
@@ -60,28 +60,21 @@ from rl_library.monitors import unity_monitor
 from rl_library.monitors.unity_monitor import UnityMonitor
 
 
-def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
+def main(seed=seed):
     # ---------------------------------------------------------------------------------------------------
     #  Logger
     # ---------------------------------------------------------------------------------------------------
-    path = Path(__file__).parent
     save_path = f"./results/MultiAgents_DDPG_{pd.Timestamp.utcnow().value}"
     os.makedirs(save_path, exist_ok=True)
 
-    # logging.basicConfig(filename=f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log",
-    #                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    #                     level=logging.INFO)
     logger = logging.getLogger()
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
 
     handler = logging.FileHandler(f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log")
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(formatter)
-    # stream_handler = logging.StreamHandler()
-    # stream_handler.setFormatter(formatter)
-
-    # logger.addHandler(stream_handler)
     logger.addHandler(handler)
+
     # ---------------------------------------------------------------------------------------------------
     #  Inputs
     # ---------------------------------------------------------------------------------------------------
@@ -126,8 +119,11 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         state_normalizer=None,  # "RunningMeanStd"
         warmup=0,  # Number of random actions to start with as a warm-up
         start_time=str(pd.Timestamp.utcnow()),
-        # random_seed=seed
+        random_seed=seed
     )
+    logger.warning("+=" * 90)
+    logger.warning(f"  RUNNING SIMULATION WITH PARAMETERS config={config}")
+    logger.warning("+=" * 90)
 
     # ------------------------------------------------------------
     #  1. Initialization
@@ -211,7 +207,7 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
     # ------------------------------------------------------------
     else:
         agent = DDPGAgent.load(filepath=config['save_path'], mode="test")
-        scores = monitor.run(env, agent, brain_name, n_episodes=10, length_episode=1e6, mode="test")
+        scores = monitor.run(agent)
         logger.info(f"Test Score over {len(scores)} episodes: {np.mean(scores)}")
         config["test_scores"] = scores
         config["best_test_score"] = max(scores)
@@ -225,15 +221,4 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
 if __name__ == "__main__":
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    skip_first = 0
-    for batch_size in [64]:
-        for weight_decay in [0.000001, ]:
-            for discount_factor in [0.9, ]:
-                if skip_first > 0:
-                    skip_first -= 1
-                    continue
-                logger.warning("+=" * 90)
-                logger.warning(f"  RUNNING SIMULATION WITH PARAMETERS discount_factor={discount_factor}, "
-                               f"weight_decay={weight_decay}, batch_size={batch_size}")
-                logger.warning("+=" * 90)
-                main(discount_factor=discount_factor, weight_decay=weight_decay, batch_size=batch_size)
+    main()
