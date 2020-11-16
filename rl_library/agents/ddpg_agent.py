@@ -37,6 +37,7 @@ class DDPGAgent(BaseAgent):
         super().__init__(state_size, action_size, config)
 
         # General class parameters
+        self.config=config
         self.action_space_low = action_space_low
         self.action_space_high = action_space_high
         self.losses = deque(maxlen=int(1e3))  # actor, critic
