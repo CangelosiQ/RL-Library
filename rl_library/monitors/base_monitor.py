@@ -10,6 +10,7 @@ import logging
 import numpy as np
 import pandas as pd
 import os, pickle
+import torch
 
 from rl_library.utils.utils import NpEncoder
 from rl_library.utils.visualization import plot_scores
@@ -181,22 +182,41 @@ class Monitor:
 
     def intermediate_save(self, i_episode, scores, agent, save_prefix):
         if self.save_every and self.mode == "train" and self.save_path and i_episode % self.save_every == 0:
-            logger.info(f'Saving model to {self.save_path}')
-            if not os.path.exists(self.save_path):
-                os.makedirs(self.save_path, exist_ok=True)
-            agent.save(filepath=self.save_path)
-            with open(self.save_path + "/scores.pickle", "wb") as f:
-                pickle.dump(scores, f)
-            if not self.render:
-                plot_scores(list(np.mean(scores, axis=0)), path=self.save_path, threshold=self.threshold,
-                            prefix=save_prefix)
-                if len(self.evaluation_scores)>0:
-                    plot_scores(self.evaluation_scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix + '_evaluation')
-                plot_scores(np.array(self.agent_losses).transpose(), path=self.save_path, prefix=save_prefix + '_agent_loss',
-                            log=True)
+            self._save_training(agent, scores, save_prefix, i_episode)
 
-            # Save config
-            self.save_config(scores, i_episode)
+    def save_and_plot(self, scores, agent, save_prefix):
+        if self.save_path and self.mode == "train":
+            self._save_training(agent, scores, save_prefix)
+        elif self.mode == "test":
+            plot_scores(scores, path=".", threshold=self.threshold, prefix=save_prefix)
+
+    def _save_training(self, agent, scores, save_prefix, i_episode=None):
+        logger.info(f'Saving model to {self.save_path}')
+        if not os.path.exists(self.save_path):
+            os.makedirs(self.save_path, exist_ok=True)
+
+        # Save agent
+        agent.save(filepath=self.save_path)
+
+        # Save scores
+        with open(self.save_path + "/scores.pickle", "wb") as f:
+            pickle.dump(scores, f)
+
+        # Plot scores
+        if not self.render:
+            self.plots(scores, save_prefix)
+
+        # Save config
+        self.save_config(scores, i_episode)
+
+    def plots(self, scores, save_prefix):
+        plot_scores(list(np.mean(scores, axis=0)), path=self.save_path, threshold=self.threshold,
+                    prefix=save_prefix)
+        if len(self.evaluation_scores) > 0:
+            plot_scores(self.evaluation_scores, path=self.save_path, threshold=self.threshold,
+                        prefix=save_prefix + '_evaluation')
+        plot_scores(np.array(self.agent_losses).transpose(), path=self.save_path, prefix=save_prefix + '_agent_loss',
+                    log=True)
 
     def save_config(self, scores, i_episode=None):
         self.config["current_episode"] = i_episode
@@ -214,23 +234,6 @@ class Monitor:
         self.config["elapsed_time"] = pd.Timedelta(pd.Timestamp.utcnow() - self.start).total_seconds()
         with open(f"./{self.config['save_path']}/config.json", "w") as f:
             json.dump(self.config, f, cls=NpEncoder)
-
-    def save_and_plot(self, scores, agent, save_prefix):
-        if self.save_path and self.mode == "train":
-            if not os.path.exists(self.save_path):
-                os.makedirs(self.save_path, exist_ok=True)
-            agent.save(filepath=self.save_path)
-            with open(self.save_path + "/scores.pickle", "wb") as f:
-                pickle.dump(scores, f)
-            if not self.render:
-                plot_scores(scores, path=self.save_path, threshold=self.threshold, prefix=save_prefix)
-                plot_scores(self.evaluation_scores, path=self.save_path, threshold=self.threshold,
-                            prefix=save_prefix + '_evaluation')
-                plot_scores(self.agent_losses, path=self.save_path, prefix=save_prefix + '_agent_loss', log=True)
-            # Save config
-            self.save_config(scores)
-        elif self.mode == "test":
-            plot_scores(scores, path=".", threshold=self.threshold, prefix=save_prefix)
 
     def play(self, agent):
         state = self.reset()

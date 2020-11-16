@@ -142,7 +142,11 @@ class DDPGAgent(BaseAgent):
         """Returns actions for given state as per current policy."""
         # Warm-up = Random action
         if self.warmup > 0:
-            action = self.warmup_action(state)
+            if self.n_agents>1:
+                action = np.array([eps * self.action_noise[i].sample() for i in range(self.n_agents)])
+            else:
+                action = self.action_noise[0].sample()
+            # action = self.warmup_action(state)
             return action
 
         if self.state_normalizer:
@@ -239,7 +243,7 @@ class DDPGAgent(BaseAgent):
         # Minimize the loss
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        # torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
+        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
         self.critic_optimizer.step()
 
         # ---------------------------- update actor ---------------------------- #
@@ -249,7 +253,7 @@ class DDPGAgent(BaseAgent):
         # Minimize the loss
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
-        # torch.nn.utils.clip_grad_norm_(self.actor_local.parameters(), 1)
+        torch.nn.utils.clip_grad_norm_(self.actor_local.parameters(), 1)
         self.actor_optimizer.step()
         self.losses.append([float(actor_loss), float(critic_loss)])
         self.avg_loss = np.mean(np.array(self.losses), axis=0)
@@ -427,6 +431,22 @@ class DDPGAgent(BaseAgent):
                 self.parameter_noise = None
         else:
             self.parameter_noise = None
+
+    def save(self, filepath):
+        checkpoint = {
+            'state_size': self.state_size,
+            'action_size': self.action_size,
+            'hidden_layers_sizes': self.hidden_layers_sizes,
+            'state_dict_actor_local': self.actor_local.state_dict(),
+            'state_dict_actor_target': self.actor_target.state_dict(),
+            'state_dict_critic_local': self.critic_local.state_dict(),
+            'state_dict_critic_target': self.critic_target.state_dict(),
+
+            'optimizer_actor': self.actor_optimizer.state_dict(),
+            'optimizer_critic': self.critic_optimizer.state_dict()
+        }
+
+        torch.save(checkpoint, filepath+'/checkpoint.pth')
 
     def __str__(self):
         s = f"DDPG Agent: \n" \

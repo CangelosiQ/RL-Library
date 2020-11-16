@@ -84,11 +84,12 @@ def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
         LR_CRITIC=3e-4,  # learning rate of the critic
         WEIGHT_DECAY=0.001,  # L2 weight decay
         UPDATE_EVERY=1,  # Number of actions before making a learning step
+        N_CONSECUTIVE_LEARNING_STEPS=2,
         action_noise="OU",  #
         action_noise_scale=1,
         weights_noise=None,  #
         state_normalizer=None, #"RunningMeanStd",  #
-        warmup=0,  # Number of random actions to start with as a warm-up
+        warmup=5e3,  # Number of random actions to start with as a warm-up
         start_time=str(pd.Timestamp.utcnow()),
     )
 
