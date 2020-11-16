@@ -147,7 +147,7 @@ class Monitor:
             eps = max(self.eps_end, self.eps_decay * eps)  # decrease epsilon
             solved = self.logging(i_episode, scores_window, scores, eps, solved, agent, t)
 
-            self.intermediate_save( i_episode, scores_history, agent, save_prefix)
+            self.intermediate_save(i_episode, scores_history, agent, save_prefix)
 
         self.save_and_plot(scores_history, agent, save_prefix)
 
@@ -210,7 +210,7 @@ class Monitor:
         self.save_config(scores, i_episode)
 
     def plots(self, scores, save_prefix):
-        plot_scores(list(np.mean(scores, axis=0)), path=self.save_path, threshold=self.threshold,
+        plot_scores(list(np.mean(scores, axis=1)), path=self.save_path, threshold=self.threshold,
                     prefix=save_prefix)
         if len(self.evaluation_scores) > 0:
             plot_scores(self.evaluation_scores, path=self.save_path, threshold=self.threshold,
