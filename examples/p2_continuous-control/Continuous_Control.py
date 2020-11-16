@@ -72,7 +72,11 @@ from rl_library.monitors import unity_monitor
 from rl_library.monitors.unity_monitor import UnityMonitor
 
 
-def main(discount_factor=0.99, weight_decay=0.0001, batch_size=64):
+def main(discount_factor=0.9, weight_decay=0.001, batch_size=64,
+         hidden_layers_actor=(100, 30,),  #
+         hidden_layers_critic_body=(100,),  #
+         hidden_layers_critic_head=(30,),  #
+         ):
     importlib.reload(unityagents)
     from unityagents import UnityEnvironment
 
