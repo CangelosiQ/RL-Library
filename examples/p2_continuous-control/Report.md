@@ -6,6 +6,7 @@ This report details the methods, algorithms, results and learnings from working 
 
 
 ![Alt Text](DRL-Navigation.gif)
+![Alt Text](plot_scores_multiagent_success.png)
 
 
 

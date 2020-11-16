@@ -77,7 +77,7 @@ def main(seed=seed):
     # ---------------------------------------------------------------------------------------------------
     #  Inputs
     # ---------------------------------------------------------------------------------------------------
-    n_episodes = 500
+    n_episodes = 300
     config = dict(
         # Environment parameters
         env_name="Reacher",
@@ -91,18 +91,17 @@ def main(seed=seed):
 
         # Agent Parameters
         agent="DDPG",
-        hidden_layers_actor=(200, 150),  #
-        hidden_layers_critic_body=(400,),  #
-        hidden_layers_critic_head=(300,),  #
+        hidden_layers_actor=(200, 150),  # (50, 50, 15),  # (200, 150),  #
+        hidden_layers_critic_body=(400,),  # (50, 50,),  #
+        hidden_layers_critic_head=(300,),  # (50,),   # (300,)
         func_critic_body="F.relu",  #
         func_critic_head="F.relu",  #
         func_actor_body="F.relu",  #
-        lr_scheduler=None,
-        # {'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
-        #                   'gamma': 0.5,  # 0.99999,
-        #                   'step_size': 1,
-        #                   'milestones': [10*1000 * i for i in range(1, 6)],
-        #                   'max_epochs': n_episodes},
+        lr_scheduler={'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
+                          'gamma': 0.5,  # 0.99999,
+                          'step_size': 1,
+                          'milestones': [30*1000 * i for i in range(1, 6)],
+                          'max_epochs': n_episodes},
 
         TAU=1e-3,  # for soft update of target parameters
         BUFFER_SIZE=int(1e6),  # replay buffer size
@@ -118,7 +117,8 @@ def main(seed=seed):
         state_normalizer=None,  # "RunningMeanStd"
         warmup=0,  # Number of random actions to start with as a warm-up
         start_time=str(pd.Timestamp.utcnow()),
-        random_seed=seed
+        random_seed=seed,
+        threshold=30
     )
     logger.warning("+=" * 90)
     logger.warning(f"  RUNNING SIMULATION WITH PARAMETERS config={config}")
@@ -129,8 +129,8 @@ def main(seed=seed):
     # ------------------------------------------------------------
     # 1. Start the Environment
 
-    env = UnityEnvironment(file_name=f'./Reacher_Linux_2/Reacher.x86_64')  # Linux
-    # env = UnityEnvironment(file_name=f'./{config["env_name"]}')  # mac OS
+    # env = UnityEnvironment(file_name=f'./Reacher_Linux_2/Reacher.x86_64')  # Linux
+    env = UnityEnvironment(file_name=f'./{config["env_name"]}')  # mac OS
 
     # get the default brain
     brain_name = env.brain_names[0]
