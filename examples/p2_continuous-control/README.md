@@ -104,3 +104,25 @@ This is exactly the file currently being read :-) describing the project environ
 
 ### Report
 The report for this project is `examples/navigation/Report.md`.
+
+
+## 3. Installation Guide
+
+
+In order to run the examples with UnityAgents, please install the dependencies located under *setup_unityagents* by running the following commands:
+
+    cd setup_unityagents
+    pip install .
+
+Then install the package dependencies by running **after going back to the root of the repository** (e.g. by running `cd ..`)
+
+    pip install -r requirements.txt
+
+Finally, install the rl_library package by running
+
+    pip install .
+or for development mode:
+    
+    pip install -e .
+
+For more details on the repository structure and installation steps please refer to the main README file [here](../../README.md).
