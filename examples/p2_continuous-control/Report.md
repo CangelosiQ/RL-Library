@@ -6,7 +6,7 @@ This report details the methods, algorithms, results and learnings from working 
 
 
 ![Alt Text](DRL-Navigation.gif)
-![Alt Text](plot_scores_multiagent_success.png)
+
 
 
 
@@ -27,20 +27,25 @@ The DDPG agent is implemented under `rl_library/agents/ddpg_agent.py` and is bas
 First, I started to work on the DDPG agent using the example of the Bipedal-Walker, which was not really solved with the code and hyper-parameters provided in the nanodegree. From there my first initiative was to move this code to the rl_library, improve the monitors already started and continue from there to improve the DDPG Agent. As recommended by the teacher Miguel Morales, I perused the [DeepRL](https://github.com/ShangtongZhang/DeepRL) repository from  ShangtongZhang. I found the general implementation of the neural networks into head and body classes very elegant and reused this concept. I also read the [DDPG paper](https://arxiv.org/abs/1509.02971) several times. Unfortunately, I spent enormous amount of time trying to solve the Bipedal-Walker-v3 and the single agent continuous-control Unity environment with not much success at first. I implemented different noise options to add to the actions or to the network weights, different batch and reward normalizations, added learning rate schedulers for the network optimizers and did a lot of hyperparameter tuning which I could analyse thanks to thorough book-keeping of every parameter into configuration JSON files. I also studied the implementation from openai in the [baselines](https://github.com/openai/baselines) repository. After several weeks into this process, I decided to review how others solved this continuous-control problem and could finally spot some mistakes I had made early on when splitting actor and critics neural networks into heads and bodies: the critic last layer was not a single value for Q(s, a) but had the same size as the actor last layer, one node per action. Then, after finally starting to print much more debugging outputs in the console, I could spot that I was reusing the ReplayBuffer from the previous project, which was refactoring actions into integers. Finally, in my effort to make the code flexible enough, I realised I had the critic network head doing an extra relu activation on the last Linear layer, making learning almost impossible. Interestingly, this was not breaking anything nor leading to noticeable divergence. It was not a pleasant experience for sure but after understanding my mistake and looking back at all the work I had done to try improving the DDPG agent I have learned much deeper the algorithm details, its multiple implementations in github and its various tricks.  
 
 
-Once I finally had one implementation successfully solving the multi-agent continuous problem, the method I followed was to gradually reactivate some of the improvements I had already implemented: compare different noises, evaluate the impact of batch normalization, of reward normalization, see if using learning rate schedulers accelarate learning or not, do some hyper parameters tuning to understand which ones have the greatest impact. Then I would like to solve the other environments, the single agent and the crawler and to compare this DDPG approach to other algorithms as A3C, A2C, PPO, TRPO or D4PG. However, because of the delay I got in this project, most of this will have to be stated as further work in this report.
+Once I finally had one implementation successfully solving the multi-agent continuous problem, the method I followed was to gradually reactivate some of the improvements I had already implemented: compare different noises, evaluate the impact of batch normalization, of reward normalization, see if using learning rate schedulers accelerate learning or not, do some hyper parameters tuning to understand which ones have the greatest impact. Then I would like to solve the other environments, the single agent and the crawler and to compare this DDPG approach to other algorithms as A3C, A2C, PPO, TRPO or D4PG. However, because of the delay I got in this project, most of this will have to be stated as further work in this report.
 
 ### Algorithm
 
+To solve this continuous-control problem, the Deep Deterministic Policy Gradient (DDPG) algorithm was used. Following its original [paper](https://arxiv.org/abs/1509.02971), two fully connected networks were used to learn the best actions (actor) given the current state and the state-value function Q(s, a) (critic) given the current state and taken action. Both actor and critic have a local and a target network which are constantly but "softly" synchronised by updating the target parameters with a fraction of the local parameters at every learning step. This proved to significantly stabilize training. Like in the paper, we use an Orstein-Uhlenbeck process to add noise to the taken actions and allow the agent to explore. Finally, as recommended in the DDPG paper, we use batch normalization and evaluate its impact on the training (from [Ioffe & Szegedy](https://arxiv.org/abs/1502.03167)).
 
 
 ## Results Comparison
 
 
+
 ## Further Work
 
-As already mentioned in the Methods and Algorithms section, there were a lot of items I wanted to study, learn, implement and compare in the framework of this project that I have to state as further work, given that most of my time on that project has been spent integrating the DDPG agent into the rl-library and learning the hard way the generalization requires more careful testing.
+As already mentioned in the Methods and Algorithms section, there were a lot of items I wanted to study, learn, implement and compare in the framework of this project that I have to state as further work, given that most of my time on that project has been spent integrating the DDPG agent into the rl-library and learning the hard way that generalization requires more careful testing. Below is a non-exhaustive list of further work on this type of problems.
 
-    - 
+1. Adaptive Parameter Noise: Instead of adding noise to the actions, [adding noise to the networks weights](https://openai.com/blog/better-exploration-with-parameter-noise/) has proved to boost performance
+2. Adaptive Reward Normalization
+3. Comparison with other algorithms (A3C, A2C, PPO, TRPO, D4PG)
+4. Prioritized Replay buffer and its impact on number of episodes and elapsed time before solving the problem
 
 ## Self-Evaluation against evaluation criteria of the report
 
@@ -63,6 +68,7 @@ Please read section Methods and Algorithms.
 #### Plot of Rewards
     A plot of rewards per episode is included to illustrate that the agent is able to receive an average reward (over 100 episodes) of at least +13. The submission reports the number of episodes needed to solve the environment.
 
+![Alt Text](plot_scores_multiagent_success.png)
 
 #### Ideas for Future Work
     The submission has concrete future ideas for improving the agent's performance.

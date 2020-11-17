@@ -14,18 +14,11 @@ Notes:
     course when the agent is far away it needs to know which suite of actions will get him back to the ball direction.
 
 TODO:
-    - F.tanh(
-    - Change noise to be for all agents
+    - F.tanh() deprecated
     - Reward Normalization
     - Try BatchNorm
-    - Try leakyrelu
-    - Use baseline DDPG
     - use AdaptiveParamNoiseSpec
     - parameter noise
-    - Double DDDPG? Rainbow DDPG?
-    - agent avg_loss only represent a few actions ?
-    - different learning rate decay
-    - multi agent
     - Check that GPU is used on Linux
 
 """
@@ -97,11 +90,11 @@ def main(seed=seed):
         func_critic_body="F.relu",  #
         func_critic_head="F.relu",  #
         func_actor_body="F.relu",  #
-        lr_scheduler={'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
-                          'gamma': 0.5,  # 0.99999,
-                          'step_size': 1,
-                          'milestones': [30*1000 * i for i in range(1, 6)],
-                          'max_epochs': n_episodes},
+        lr_scheduler=None,  # {'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
+                      # 'gamma': 0.5,  # 0.99999,
+                      # 'step_size': 1,
+                      # 'milestones': [30*1000 * i for i in range(1, 6)],
+                      # 'max_epochs': n_episodes},
 
         TAU=1e-3,  # for soft update of target parameters
         BUFFER_SIZE=int(1e6),  # replay buffer size

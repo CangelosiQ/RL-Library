@@ -11,7 +11,7 @@ from torch.optim import lr_scheduler
 import logging
 
 from rl_library.agents.base_agent import BaseAgent
-from rl_library.utils.noises import OUNoise
+from rl_library.utils.noises import OUNoise, NormalActionNoise
 from rl_library.utils.normalizer import MeanStdNormalizer, RunningMeanStd
 from rl_library.utils.replay_buffers import ReplayBuffer
 
@@ -417,6 +417,8 @@ class DDPGAgent(BaseAgent):
             if config["action_noise"] == "OU":
                 self.action_noise = [OUNoise(size, self.seed*i, scale=config.get("action_noise_scale",
                                                                                       1)) for i in range(self.n_agents)]
+            elif config["action_noise"] == "normal":
+                self.action_noise = [NormalActionNoise(size=size) for _ in range(self.n_agents)]
             else:
                 logger.warning(f"action_noise {config['action_noise']} not understood.")
                 self.action_noise = None
