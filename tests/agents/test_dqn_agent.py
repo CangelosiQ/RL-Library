@@ -47,6 +47,8 @@ class TestDQAgent(unittest.TestCase):
         self.assertEqual(len(agent.qnetwork_local.state_dict()), 2*3)
         self.assertEqual(tuple(agent.qnetwork_local.state_dict()["fc0.weight"].size()), (30, 10))
 
+    def test_cart_pole(self):
+        env = gym.make('CartPole-v0')
 
 if __name__ == '__main__':
     unittest.main()
