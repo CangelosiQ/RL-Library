@@ -5,7 +5,7 @@ Author: Quentin Cangelosi, <cangelosi.quentin@gmail.com>
 This report details the methods, algorithms, results and learnings from working on the Multi Agents Continuous Control project, as part of the Udacity Nanodegree Deep Reinforcement Learning. For more information on the environment please go the README [here](README.md)
 
 
-![Alt Text](DRL-Navigation.gif)
+![Alt Text](trained_agent.gif)
 
 
 
