@@ -188,7 +188,7 @@ class Monitor:
         if self.save_path and self.mode == "train":
             self._save_training(agent, scores, save_prefix)
         elif self.mode == "test":
-            plot_scores(scores, path=".", threshold=self.threshold, prefix=save_prefix)
+            plot_scores(list(np.mean(scores, axis=1)), path=".", threshold=self.threshold, prefix=save_prefix)
 
     def _save_training(self, agent, scores, save_prefix, i_episode=None):
         logger.info(f'Saving model to {self.save_path}')
