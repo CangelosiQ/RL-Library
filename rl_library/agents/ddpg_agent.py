@@ -103,7 +103,7 @@ class DDPGAgent(BaseAgent):
             if len(self.memory) > self.BATCH_SIZE:
                 for _ in range(self.N_CONSECUTIVE_LEARNING_STEPS):
                     experiences = self.memory.sample()
-                    # experiences = self.batch_normalization(experiences)
+                    experiences = self.batch_normalization(experiences)
                     self.learn(experiences, self.GAMMA)
 
         # Warming-up
@@ -121,8 +121,8 @@ class DDPGAgent(BaseAgent):
         if self.state_normalizer:
             states = self.state_normalizer(states)
             next_states = self.state_normalizer(next_states)
-            states = torch.from_numpy(states).float().to(device)
-            next_states = torch.from_numpy(next_states).float().to(device)
+            # states = torch.from_numpy(states).float().to(device)
+            # next_states = torch.from_numpy(next_states).float().to(device)
 
         if self.reward_normalizer:
             rewards = self.reward_normalizer(rewards)
@@ -151,10 +151,7 @@ class DDPGAgent(BaseAgent):
             return action
 
         if self.state_normalizer:
-            if self.state_normalizer.__class__.__name__ == "BatchNorm1d":
-                state = self.state_normalizer(state)
-            else:
-                state = self.state_normalizer(state, read_only=True)
+            state = self.state_normalizer(state, read_only=True)
 
         state = torch.from_numpy(state).float().to(device)
 
@@ -399,7 +396,12 @@ class DDPGAgent(BaseAgent):
         elif self.state_normalizer == "RunningMeanStd":
             self.state_normalizer = RunningMeanStd(shape=self.state_size)
         elif self.state_normalizer == "BatchNorm":
-            self.state_normalizer = nn.BatchNorm1d(self.state_size)
+            # Activate Batch Normalization directly in the networks
+            self.state_normalizer = None
+            self.actor_local.bn = nn.BatchNorm1d(self.state_size)
+            self.actor_target.bn = nn.BatchNorm1d(self.state_size)
+            self.critic_local.bn = nn.BatchNorm1d(self.state_size)
+            self.critic_target.bn = nn.BatchNorm1d(self.state_size)
 
         if self.reward_normalizer == "MeanStd":
             self.reward_normalizer = MeanStdNormalizer()
@@ -450,6 +452,31 @@ class DDPGAgent(BaseAgent):
         }
 
         torch.save(checkpoint, filepath+'/checkpoint.pth')
+
+    def load(self, filepath, mode="test"):
+        logger.info(f"Loading Agent from {filepath}")
+        checkpoint = torch.load(filepath + '/checkpoint.pth')
+
+        self.actor_local.load_state_dict(checkpoint['state_dict_actor_local'])
+        self.actor_target.load_state_dict(checkpoint['state_dict_actor_target'])
+        self.actor_target.eval()
+
+        self.critic_local.load_state_dict(checkpoint['state_dict_critic_local'])
+        self.critic_target.load_state_dict(checkpoint['state_dict_critic_target'])
+        self.critic_target.eval()
+
+        if mode == "train":
+            self.actor_local.train()
+            self.critic_local.train()
+        else:
+            self.actor_local.eval()
+            self.critic_local.eval()
+
+        self.actor_optimizer.load_state_dict(checkpoint["optimizer_actor"])
+        self.critic_optimizer.load_state_dict(checkpoint["optimizer_critic"])
+
+
+
 
     def __str__(self):
         s = f"DDPG Agent: \n" \

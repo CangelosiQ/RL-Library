@@ -34,12 +34,15 @@ class SimpleNeuralNetHead(nn.Module):
         self.body = body
         self.head = nn.Linear(body.layers_sizes[-1], action_size)
         self.func = func
+        self.bn = None # For batch normalization
         self.reset_parameters()
         logger.info(f"Initialized {self.__class__.__name__} with body : {self.body.layers} and head {self.head}")
         logger.info(f"state_dict= {self.state_dict()}")
 
     def forward(self, x):
         """Build a network that maps state -> action values."""
+        if self.bn:
+            x = self.bn(x)
         x = self.body(x)
         x = self.head(x).to(device)
 
@@ -73,10 +76,11 @@ class DeepNeuralNetHeadCritic(nn.Module):
         super(DeepNeuralNetHeadCritic, self).__init__()
         self.seed = np.random.seed(seed)
         self.body = body
-        self.layers_sizes = (body.layers_sizes[-1] + action_size,) + hidden_layers_sizes + (1,) #(action_size,)
+        self.layers_sizes = (body.layers_sizes[-1] + action_size,) + tuple(hidden_layers_sizes) + (1,) #(action_size,)
 
         self.layers = nn.ModuleList(
             [nn.Linear(inputs, outputs) for inputs, outputs in zip(self.layers_sizes[:-1], self.layers_sizes[1:])])
+        self.bn = None  # For batch normalization
         self.reset_parameters()
         logger.info(f"Initialized {self.__class__.__name__} with body : {self.body.layers} and head {self.layers}")
         logger.info(f"state_dict= {self.state_dict()}")
@@ -85,7 +89,8 @@ class DeepNeuralNetHeadCritic(nn.Module):
 
     def forward(self, x, action):
         """Build a network that maps state -> action values."""
-        # print(f"x={x}")
+        if self.bn:
+            x = self.bn(x)
         x = self.body(x)
         # print(f"self.body(x)={x}")
         x = torch.cat((x, action), dim=1)

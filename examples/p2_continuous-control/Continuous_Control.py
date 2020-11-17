@@ -14,29 +14,12 @@ Notes:
     course when the agent is far away it needs to know which suite of actions will get him back to the ball direction.
 
 TODO:
-    DONE - Proper Book-Keeeping
-    DONE - Raise number of episode to 2000 to approximately match the DDPG 2.5 million steps in the results table
-    DONE - split agent scores between actor and critic to follow better what is hapening there
-    DONE - instead of epsilon decay, split into evaluation and exploration phases (eg. evaluate for 1 episode every 50
-    episodes?)
-    DONE - scale=1 for OUNoise
-    DONE - interm save confi
-    DONE - slowly decaying the learning rate as the model approaches an optima
-    DONE - reduce weight decay
-    DONE - activate batch normalization
-    DONE - do running mean normalization
-    DONE - Try even more extreme Discount factor
+    - F.tanh() deprecated
     - Reward Normalization
     - Try BatchNorm
-    - Try leakyrelu
     - use AdaptiveParamNoiseSpec
     - parameter noise
-    - Double DDDPG? Rainbow DDPG?
-    - agent avg_loss only represent a few actions ?
-    - different learning rate decay
-    - multi agent
     - Check that GPU is used on Linux
-
 
 """
 
@@ -53,45 +36,32 @@ import os
 import pandas as pd
 from pathlib import Path
 import torch
-import json
-import sys
 import torch.nn.functional as F
 
-np.random.seed(42)
-torch.manual_seed(42)
-import importlib
+seed = 42
+np.random.seed(seed)
+torch.manual_seed(seed)
 
 # ---------------------------------------------------------------------------------------------------
 #  Internal Dependencies
 # ---------------------------------------------------------------------------------------------------
-import unityagents
+from unityagents import UnityEnvironment
 from rl_library.agents.ddpg_agent import DDPGAgent
 from rl_library.agents.models.bodies import SimpleNeuralNetBody
 from rl_library.agents.models.heads import SimpleNeuralNetHead, DeepNeuralNetHeadCritic
-from rl_library.monitors import unity_monitor
 from rl_library.monitors.unity_monitor import UnityMonitor
 
 
-def main(discount_factor=0.9, weight_decay=0.001, batch_size=64,
-         hidden_layers_actor=(100, 30,),  #
-         hidden_layers_critic_body=(100,),  #
-         hidden_layers_critic_head=(30,),  #
-         ):
-    importlib.reload(unityagents)
-    from unityagents import UnityEnvironment
-
+def main(seed=seed):
     # ---------------------------------------------------------------------------------------------------
     #  Logger
     # ---------------------------------------------------------------------------------------------------
-    path = Path(__file__).parent
-    save_path = f"./results/DDPG_{pd.Timestamp.utcnow().value}"
+    save_path = f"./results/MultiAgents_DDPG_{pd.Timestamp.utcnow().value}"
     os.makedirs(save_path, exist_ok=True)
 
-    # logging.basicConfig(filename=f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log",
-    #                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    #                     level=logging.INFO)
     logger = logging.getLogger()
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
+
     handler = logging.FileHandler(f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log")
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(formatter)
@@ -103,29 +73,28 @@ def main(discount_factor=0.9, weight_decay=0.001, batch_size=64,
     n_episodes = 300
     config = dict(
         # Environment parameters
-        env_name="Reacher 2",
+        env_name="Reacher",
         n_episodes=n_episodes,
         length_episode=1500,
         save_every=100,
         save_path=save_path,
         mode="train",  # "train" or "test"
-        evaluate_every=50,  # Number of training episodes before 1 evaluation episode
+        evaluate_every=5000,  # Number of training episodes before 1 evaluation episode
         eps_decay=1,  # Epsilon decay rate
 
         # Agent Parameters
         agent="DDPG",
-        hidden_layers_actor=(200, 150),  #
-        hidden_layers_critic_body=(400,),  #
-        hidden_layers_critic_head=(300, ),  #
+        hidden_layers_actor=(200, 150),  # (50, 50, 15),  # (200, 150),  #
+        hidden_layers_critic_body=(400,),  # (50, 50,),  #
+        hidden_layers_critic_head=(300,),  # (50,),   # (300,)
         func_critic_body="F.relu",  #
         func_critic_head="F.relu",  #
         func_actor_body="F.relu",  #
-        lr_scheduler=None,
-    # {'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
-    #                   'gamma': 0.5,  # 0.99999,
-    #                   'step_size': 1,
-    #                   'milestones': [10*1000 * i for i in range(1, 6)],
-    #                   'max_epochs': n_episodes},
+        lr_scheduler=None,  # {'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
+                      # 'gamma': 0.5,  # 0.99999,
+                      # 'step_size': 1,
+                      # 'milestones': [30*1000 * i for i in range(1, 6)],
+                      # 'max_epochs': n_episodes},
 
         TAU=1e-3,  # for soft update of target parameters
         BUFFER_SIZE=int(1e6),  # replay buffer size
@@ -138,17 +107,22 @@ def main(discount_factor=0.9, weight_decay=0.001, batch_size=64,
         action_noise="OU",  #
         action_noise_scale=1,
         weights_noise=None,  #
-        state_normalizer=None,  # "RunningMeanStd"
+        state_normalizer="BatchNorm",  # "RunningMeanStd" or "BatchNorm"
         warmup=0,  # Number of random actions to start with as a warm-up
         start_time=str(pd.Timestamp.utcnow()),
+        random_seed=seed,
+        threshold=30
     )
+    logger.warning("+=" * 90)
+    logger.warning(f"  RUNNING SIMULATION WITH PARAMETERS config={config}")
+    logger.warning("+=" * 90)
 
     # ------------------------------------------------------------
     #  1. Initialization
     # ------------------------------------------------------------
     # 1. Start the Environment
 
-    # env = UnityEnvironment(file_name=f'./Reacher_Linux/Reacher.x86_64')  # Linux
+    # env = UnityEnvironment(file_name=f'./Reacher_Linux_2/Reacher.x86_64')  # Linux
     env = UnityEnvironment(file_name=f'./{config["env_name"]}')  # mac OS
 
     # get the default brain
@@ -182,21 +156,36 @@ def main(discount_factor=0.9, weight_decay=0.001, batch_size=64,
 
     if config["mode"] == "train":
         # Actor model
-        actor = SimpleNeuralNetHead(action_size, SimpleNeuralNetBody(state_size, config["hidden_layers_actor"]),
-                                    func=torch.tanh)
+        seed = 0
+        actor = SimpleNeuralNetHead(action_size,
+                                    SimpleNeuralNetBody(state_size, config["hidden_layers_actor"], seed=seed),
+                                    func=F.tanh, seed=seed)
+        actor_target = SimpleNeuralNetHead(action_size,
+                                           SimpleNeuralNetBody(state_size, config["hidden_layers_actor"], seed=seed),
+                                           func=F.tanh, seed=seed)
         # Critic model
         critic = DeepNeuralNetHeadCritic(action_size,
                                          SimpleNeuralNetBody(state_size, config["hidden_layers_critic_body"],
-                                                             func=eval(config["func_critic_body"])),
+                                                             func=eval(config["func_critic_body"]), seed=seed),
                                          hidden_layers_sizes=config["hidden_layers_critic_head"],
                                          func=eval(config["func_critic_head"]),
-                                         end_func=None)
+                                         end_func=None, seed=seed)
+
+        critic_target = DeepNeuralNetHeadCritic(action_size,
+                                                SimpleNeuralNetBody(state_size, config["hidden_layers_critic_body"],
+                                                                    func=eval(config["func_critic_body"]), seed=seed),
+                                                hidden_layers_sizes=config["hidden_layers_critic_head"],
+                                                func=eval(config["func_critic_head"]),
+                                                end_func=None, seed=seed)
 
         # DDPG Agent
         agent = DDPGAgent(state_size=state_size, action_size=action_size,
                           model_actor=actor, model_critic=critic,
-                          action_space_low=-1, action_space_high=1, config=config,
+                          actor_target=actor_target, critic_target=critic_target,
+                          action_space_low=-1, action_space_high=1,
+                          config=config,
                           )
+
 
         # Training
         start = pd.Timestamp.utcnow()
@@ -210,7 +199,7 @@ def main(discount_factor=0.9, weight_decay=0.001, batch_size=64,
     # ------------------------------------------------------------
     else:
         agent = DDPGAgent.load(filepath=config['save_path'], mode="test")
-        scores = monitor.run(env, agent, brain_name, n_episodes=10, length_episode=1e6, mode="test")
+        scores = monitor.run(agent)
         logger.info(f"Test Score over {len(scores)} episodes: {np.mean(scores)}")
         config["test_scores"] = scores
         config["best_test_score"] = max(scores)
@@ -224,15 +213,4 @@ def main(discount_factor=0.9, weight_decay=0.001, batch_size=64,
 if __name__ == "__main__":
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    skip_first = 0
-    for batch_size in [64]:
-        for weight_decay in [0.0001, ]:
-            for discount_factor in [0.9,]:
-                if skip_first > 0:
-                    skip_first -= 1
-                    continue
-                logger.warning("+="*90)
-                logger.warning(f"  RUNNING SIMULATION WITH PARAMETERS discount_factor={discount_factor}, "
-                               f"weight_decay={weight_decay}, batch_size={batch_size}")
-                logger.warning("+="*90)
-                main(discount_factor=discount_factor, weight_decay=weight_decay, batch_size=batch_size)
+    main()

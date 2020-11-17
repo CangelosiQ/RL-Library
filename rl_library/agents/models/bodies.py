@@ -25,7 +25,7 @@ class SimpleNeuralNetBody(nn.Module):
         """
         super(SimpleNeuralNetBody, self).__init__()
         self.seed = np.random.seed(seed)
-        self.layers_sizes = (state_size,) + hidden_layers_sizes
+        self.layers_sizes = (state_size,) + tuple(hidden_layers_sizes)
 
         self.layers = nn.ModuleList(
             [nn.Linear(inputs, outputs) for inputs, outputs in zip(self.layers_sizes[:-1], self.layers_sizes[1:])])
