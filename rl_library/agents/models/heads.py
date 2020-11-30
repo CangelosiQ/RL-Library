@@ -37,7 +37,7 @@ class SimpleNeuralNetHead(nn.Module):
         self.bn = None # For batch normalization
         self.reset_parameters()
         logger.info(f"Initialized {self.__class__.__name__} with body : {self.body.layers} and head {self.head}")
-        logger.info(f"state_dict= {self.state_dict()}")
+        logger.debug(f"state_dict= {self.state_dict()}")
 
     def forward(self, x):
         """Build a network that maps state -> action values."""
@@ -83,7 +83,7 @@ class DeepNeuralNetHeadCritic(nn.Module):
         self.bn = None  # For batch normalization
         self.reset_parameters()
         logger.info(f"Initialized {self.__class__.__name__} with body : {self.body.layers} and head {self.layers}")
-        logger.info(f"state_dict= {self.state_dict()}")
+        logger.debug(f"state_dict= {self.state_dict()}")
         self.func = func
         self.end_func = end_func
 

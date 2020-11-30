@@ -24,7 +24,6 @@ class DDPGAgent(BaseAgent):
 
     def __init__(self, state_size, action_size, config: dict,
                  model_actor: nn.Module, model_critic: nn.Module,
-                 actor_target: nn.Module, critic_target: nn.Module,
                  action_space_high, action_space_low, debug_mode=True):
         """Initialize an Agent object.
         
@@ -45,7 +44,7 @@ class DDPGAgent(BaseAgent):
         self.training = True
         self.n_agents = config.get("n_agents", 1)
         self.debug_mode = debug_mode
-        self.debug_freq = 10000
+        self.debug_freq = 100000
         self.debug_it = 1
 
         # Hyper Parameters
@@ -63,11 +62,11 @@ class DDPGAgent(BaseAgent):
 
         # Actor Network (w/ Target Network)
         self.actor_local = model_actor.to(device)
-        self.actor_target = actor_target.to(device)  # copy.deepcopy(model_actor).to(device)
+        self.actor_target = copy.deepcopy(model_actor).to(device)
 
         # Critic Network (w/ Target Network)
         self.critic_local = model_critic.to(device)
-        self.critic_target = critic_target.to(device)  #copy.deepcopy(model_critic).to(device)
+        self.critic_target = copy.deepcopy(model_critic).to(device)
 
         # Optimizers
         self.set_optimizer(config.get("optimizer", "adam"))
@@ -82,7 +81,7 @@ class DDPGAgent(BaseAgent):
         self.init_noises(config=config)
 
         # Replay memory
-        self.memory = ReplayBuffer(self.action_size, self.BUFFER_SIZE, self.BATCH_SIZE, self.random_seed)
+        self.memory = ReplayBuffer(self.BUFFER_SIZE, self.BATCH_SIZE, self.random_seed)
 
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
@@ -400,8 +399,8 @@ class DDPGAgent(BaseAgent):
             self.state_normalizer = None
             self.actor_local.bn = nn.BatchNorm1d(self.state_size)
             self.actor_target.bn = nn.BatchNorm1d(self.state_size)
-            self.critic_local.bn = nn.BatchNorm1d(self.state_size)
-            self.critic_target.bn = nn.BatchNorm1d(self.state_size)
+            self.critic_local.bn = nn.BatchNorm1d(self.critic_local.body.layers_sizes[0])
+            self.critic_target.bn = nn.BatchNorm1d(self.critic_local.body.layers_sizes[0])
 
         if self.reward_normalizer == "MeanStd":
             self.reward_normalizer = MeanStdNormalizer()

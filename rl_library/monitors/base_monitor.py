@@ -94,7 +94,7 @@ class Monitor:
             # Turn ON Evaluation Episode
             if self.evaluate_every is not None and i_episode % self.evaluate_every == 0:
                 logger.warning("Evaluation episode ACTIVATED")
-                agent.training = False
+                agent.training = False # TODO Not working for MADDPG use function instead
 
             for t in range(int(self.length_episode)):
                 action = agent.act(state, eps=eps)
@@ -168,11 +168,13 @@ class Monitor:
               f'({n_steps} ' \
               f'steps), ' \
               f'eps: {eps:.2f}'
-        if i_episode % 25 == 0:
+        if i_episode % 100 == 0:
             logger.info(log)
             logger.info(str(agent))
-        else:
+        if i_episode % 25 == 0:
             logger.info(log)
+        else:
+            logger.debug(log)
 
         if self.threshold and np.mean(scores_window) >= self.threshold and self.mode == "train" and not solved:
             logger.warning(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score:'
