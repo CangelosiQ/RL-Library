@@ -47,7 +47,7 @@ class MADDPGAgent(BaseAgent):
         self.training = True
         self.n_agents = config.get("n_agents", 1)
         self.debug_mode = debug_mode
-        self.debug_freq = 100000
+        self.debug_freq = 5000
         self.debug_it = 1
         self.BUFFER_SIZE = config.get("BUFFER_SIZE", int(1e5))  # replay buffer size
         self.BATCH_SIZE = config.get("BATCH_SIZE", 128)  # minibatch size
@@ -77,9 +77,7 @@ class MADDPGAgent(BaseAgent):
             # Learn, if enough samples are available in memory
             if len(self.memory) > self.BATCH_SIZE:
                 for _ in range(self.N_CONSECUTIVE_LEARNING_STEPS):
-                    experiences = self.memory.sample()
-                    # experiences = self.batch_normalization(experiences) TODO
-                    self.learn(experiences)
+                    self.learn()
 
         # Warming-up
         elif self.warmup > 0:
@@ -122,7 +120,7 @@ class MADDPGAgent(BaseAgent):
         for agent in self.agents:
             agent.reset()
 
-    def learn(self, experiences):
+    def learn(self):
         """Update policy and value parameters using given batch of experience tuples.
         Q_targets = r + γ * critic_target(next_state, actor_target(next_state))
         where:
@@ -134,38 +132,41 @@ class MADDPGAgent(BaseAgent):
             experiences (Tuple[torch.Tensor]): tuple of (s, a, r, s', done) tuples 
             gamma (float): discount factor
         """
-        states, actions, rewards, next_states, dones = experiences
-        # print(f"SAMPLE:"
-        #       f"\nstates={states.size()}"
-        #       f"\nactions={actions.size()}"
-        #       f"\nnext_states={next_states.size()}"
-        #       f"\ndones={dones.size()}"
-        #       f"\nrewards={rewards.size()}"
-        #       )
-        # ---------------------------- update critic ---------------------------- #
-        # Get predicted next-state actions and Q values from target models FOR EACH AGENT
-        actions_next = []
-        actions_pred = []
-        # with torch.no_grad():
-        for j, agent in enumerate(self.agents):
-            agent_actions_next = agent.actor_target(next_states[:, j, :])
-            agent_actions_pred = agent.actor_local(states[:, j, :])
-            actions_next.append(agent_actions_next.unsqueeze(1))
-            actions_pred.append(agent_actions_pred.unsqueeze(1))
-
-        all_actions_next = torch.cat(actions_next, dim=1)
-        all_actions_next = torch.reshape(all_actions_next, (all_actions_next.size(0), -1))
 
         for i, agent in enumerate(self.agents):
-
+            # ---------------------------- sample memory ---------------------------- #
+            # New sample for each agent
+            states, actions, rewards, next_states, dones = self.memory.sample()
+            # experiences = self.batch_normalization(experiences) TODO
             all_actions = torch.reshape(actions, (actions.size(0), -1))
             all_states = torch.reshape(states, (states.size(0), -1))
             all_next_states = torch.reshape(next_states, (next_states.size(0), -1))
+
+            # print(f"SAMPLE:"
+            #       f"\nstates={states.size()}"
+            #       f"\nactions={actions.size()}"
+            #       f"\nnext_states={next_states.size()}"
+            #       f"\ndones={dones.size()}"
+            #       f"\nrewards={rewards.size()}"
+            #       )
+            # ---------------------------- update critic ---------------------------- #
+            # Get predicted next-state actions and Q values from target models FOR EACH AGENT
+            actions_next = []
+            actions_pred = []
+            # with torch.no_grad():
+            for j, _agent in enumerate(self.agents):
+                agent_actions_next = _agent.actor_target(next_states[:, j, :])
+                agent_actions_pred = _agent.actor_local(states[:, j, :])
+                actions_next.append(agent_actions_next.unsqueeze(1))
+                actions_pred.append(agent_actions_pred.unsqueeze(1))
+
+            all_actions_next = torch.cat(actions_next, dim=1)
+            all_actions_next = torch.reshape(all_actions_next, (all_actions_next.size(0), -1))
+
             # print(f"all_actions= {all_actions.size()}")
             # print(f"all_actions_next= {all_actions_next.size()}")
             # print(f"all_states.size()={all_states.size()}")
             # print(f"all_next_states.size()={all_next_states.size()}")
-
             # print(f"states[:, i, :]={states[:, i, :].size()}")
             # print(f"actions[:, i, :]={actions[:, i, :].size()}")
             # print(f"rewards[:, i]={rewards[:, i].size()}")
@@ -174,10 +175,13 @@ class MADDPGAgent(BaseAgent):
                 Q_targets_next = agent.critic_target(all_next_states, all_actions_next)
 
             # Compute Q targets for current states (y_i)
-            Q_targets = rewards[:, i] + (agent.GAMMA * Q_targets_next * (1 - dones[:, i]))
+            Q_targets = rewards[:, i].unsqueeze(1) + (agent.GAMMA * Q_targets_next * (1 - dones[:, i].unsqueeze(1)))
 
             # Compute critic loss
             Q_expected = agent.critic_local(all_states, all_actions)
+            # print(f"Q_expected.shape={Q_expected.shape}")
+            # print(f"Q_targets.shape={Q_targets.shape}")
+            # print(f"Q_targets_next.shape={Q_targets_next.shape}")
             critic_loss = F.mse_loss(Q_expected, Q_targets)
 
             # Minimize the loss
@@ -226,7 +230,6 @@ class MADDPGAgent(BaseAgent):
                 logger.info(f"critic_loss={critic_loss}")
                 logger.info(f"actions_pred={actions_pred}")
                 logger.info(f"actor_loss={actor_loss}")
-                logger.info(f"agent.critic_local(states, actions_pred)={agent.critic_local(states, actions_pred)}")
                 logger.info(f"agent.critic_local={agent.critic_local}")
                 logger.info(f"agent.critic_target={agent.critic_target}")
                 logger.info(f"agent.actor_local={agent.actor_local}")

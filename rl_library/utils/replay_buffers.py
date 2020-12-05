@@ -39,9 +39,19 @@ class ReplayBuffer:
         rewards = torch.from_numpy(np.stack([e.reward for e in experiences if e is not None])).float().to(device)
         next_states = torch.from_numpy(np.stack([e.next_state for e in experiences if e is not None])).float().to(
             device)
-        dones = torch.from_numpy(np.stack([e.done for e in experiences if e is not None]).astype(np.uint8)).float().to(
-            device)
+        dones = torch.from_numpy(np.stack([e.done for e in experiences if e is not None]).astype(np.uint8)).float(
 
+        ).to(
+            device)
+        if len(dones.shape) == 1:
+            dones = dones.unsqueeze(1)
+        if len(rewards.shape) == 1:
+            rewards = rewards.unsqueeze(1)
+
+        # print(f"states.size()={states.size()}")
+        # print(f"actions.size()={actions.size()}")
+        # print(f"rewards.size()={rewards.size()}")
+        # print(f"done.size()={dones.shape}")
         return states, actions, rewards, next_states, dones
 
     def __len__(self):

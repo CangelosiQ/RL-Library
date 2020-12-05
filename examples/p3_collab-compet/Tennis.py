@@ -61,7 +61,7 @@ def main(seed=seed):
     # ---------------------------------------------------------------------------------------------------
     #  Inputs
     # ---------------------------------------------------------------------------------------------------
-    n_episodes = 3000
+    n_episodes = 4000
     config = dict(
         # Environment parameters
         env_name="Tennis",
@@ -75,12 +75,12 @@ def main(seed=seed):
 
         # Agent Parameters
         agent="DDPG",
-        hidden_layers_actor=(400, 300),  # (50, 50, 15),  # (200, 150),  #
-        hidden_layers_critic_body=(400,),  # (50, 50,),  #
-        hidden_layers_critic_head=(300,),  # (50,),   # (300,)
-        func_critic_body="F.relu",  #
-        func_critic_head="F.relu",  #
-        func_actor_body="F.relu",  #
+        hidden_layers_actor=(256, 256),  # (50, 50, 15),  # (200, 150),  #
+        hidden_layers_critic_body=(256,),  # (50, 50,),  #
+        hidden_layers_critic_head=(256,),  # (50,),   # (300,)
+        func_critic_body="F.leaky_relu",  #
+        func_critic_head="F.leaky_relu",  #
+        func_actor_body="F.leaky_relu",  #
         lr_scheduler=None,  #{'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
                       # 'gamma': 0.5,  # 0.99999,
                       # 'step_size': 1,
@@ -88,17 +88,18 @@ def main(seed=seed):
                       # 'max_epochs': n_episodes},
 
         TAU=1e-3,  # for soft update of target parameters
-        BUFFER_SIZE=int(1e6),  # replay buffer size
+        BUFFER_SIZE=int(3e4),  # replay buffer size
         BATCH_SIZE=128,  # minibatch size
         GAMMA=0.99,  # discount factor
         LR_ACTOR=1e-4,  # learning rate of the actor
-        LR_CRITIC=1e-3,  # learning rate of the critic
+        LR_CRITIC=1e-4,  # learning rate of the critic
         WEIGHT_DECAY=0,  # L2 weight decay
-        UPDATE_EVERY=1,  # Number of actions before making a learning step
+        UPDATE_EVERY=2,  # Number of actions before making a learning step
+        N_CONSECUTIVE_LEARNING_STEPS=3,
         action_noise="OU",  #
         action_noise_scale=1,
         weights_noise=None,  #
-        state_normalizer="BatchNorm",  # "RunningMeanStd" or "BatchNorm"
+        state_normalizer=None,  #"BatchNorm",  # "RunningMeanStd" or "BatchNorm"
         warmup=1e2,  # Number of random actions to start with as a warm-up
         start_time=str(pd.Timestamp.utcnow()),
         random_seed=seed,

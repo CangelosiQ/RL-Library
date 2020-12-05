@@ -23,7 +23,7 @@ class Monitor:
     def __init__(self, config: dict):
         self.config = config
         self.env_name = config["env_name"]
-        self.env = None
+        self.env = config.get("env")
         self.seed = config.get("random_seed", 42)
 
         self.threshold = config.get("threshold")
@@ -99,7 +99,7 @@ class Monitor:
             for t in range(int(self.length_episode)):
                 action = agent.act(state, eps=eps)
 
-                # print(f"\rAction: {action} Processed: {self.process_action(action)}", end="")
+                #print(f"\rAction: {action} Processed: {self.process_action(action)}", end="")
                 next_state, reward, done, _ = self.env_step(self.process_action(action))  # send the action to the
                 # last_actions.append(action)
                 # last_states.append(state)

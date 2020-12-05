@@ -44,7 +44,7 @@ class DDPGAgent(BaseAgent):
         self.training = True
         self.n_agents = config.get("n_agents", 1)
         self.debug_mode = debug_mode
-        self.debug_freq = 100000
+        self.debug_freq = 10000
         self.debug_it = 1
 
         # Hyper Parameters

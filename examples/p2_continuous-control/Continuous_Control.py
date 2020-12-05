@@ -70,13 +70,13 @@ def main(seed=seed):
     # ---------------------------------------------------------------------------------------------------
     #  Inputs
     # ---------------------------------------------------------------------------------------------------
-    n_episodes = 250
+    n_episodes = 300
     config = dict(
         # Environment parameters
         env_name="Reacher",
         n_episodes=n_episodes,
         length_episode=1500,
-        save_every=500,
+        save_every=100,
         save_path=save_path,
         mode="train",  # "train" or "test"
         evaluate_every=5000,  # Number of training episodes before 1 evaluation episode
@@ -90,11 +90,11 @@ def main(seed=seed):
         func_critic_body="F.leaky_relu",  #
         func_critic_head="F.leaky_relu",  #
         func_actor_body="F.leaky_relu",  #
-        lr_scheduler={'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
-                      'gamma': 0.5,  # 0.99999,
-                      'step_size': 1,
-                      'milestones': [15*1000 * i for i in range(1, 6)],
-                      'max_epochs': n_episodes},
+        lr_scheduler=None,   #{'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
+        #               'gamma': 0.5,  # 0.99999,
+        #               'step_size': 1,
+        #               'milestones': [15*1000 * i for i in range(1, 6)],
+        #               'max_epochs': n_episodes},
 
         TAU=1e-3,  # for soft update of target parameters
         BUFFER_SIZE=int(1e6),  # replay buffer size
