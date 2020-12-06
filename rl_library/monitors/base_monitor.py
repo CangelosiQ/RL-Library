@@ -50,6 +50,8 @@ class Monitor:
         self.evaluate_every = config.get("evaluate_every")
         self.start = pd.Timestamp.utcnow()
         self.n_agents = config.get("n_agents", 1)
+        self.func_scoring = np.max
+
 
     def reset(self):
         state = self.reset_env()
@@ -142,8 +144,8 @@ class Monitor:
                 if self.mode == "train" and not agent.step_every_action:
                     agent.step(list_states, list_actions, list_rewards)
 
-            scores_window.append(scores)  # save most recent score
-            scores_history.append(scores)  # save most recent score
+            scores_window.append(self.func_scoring(scores))  # save most recent score
+            scores_history.append(self.func_scoring(scores))  # save most recent score
             eps = max(self.eps_end, self.eps_decay * eps)  # decrease epsilon
             solved = self.logging(i_episode, scores_window, scores, eps, solved, agent, t)
 
@@ -158,13 +160,13 @@ class Monitor:
     def logging(self, i_episode, scores_window, score, eps, solved, agent, n_steps):
         self.agent_losses.append(agent.avg_loss)
 
-        if len(self.agent_losses) < 100:
+        if len(self.agent_losses) <= 100:
             mean_loss = np.mean(np.array(self.agent_losses[:len(self.agent_losses)]), axis=0)
         else:
             mean_loss = np.mean(np.array(self.agent_losses[:-100]), axis=0)
 
-        log = f'Episode {i_episode}    Average Score: {np.mean(scores_window):.2f}, Agent Loss: ' \
-              f'{mean_loss}, Last Score: avg={np.mean(score):.2f}, min={min(score):.2f}, max={max(score):.2f} ' \
+        log = f'Episode {i_episode}    Average Score: {np.mean(scores_window):.2e}, Agent Loss: ' \
+              f'{mean_loss}, Last Score: avg={np.mean(score):.2e}, min={min(score):.2e}, max={max(score):.2e} ' \
               f'({n_steps} ' \
               f'steps), ' \
               f'eps: {eps:.2f}'
@@ -212,8 +214,12 @@ class Monitor:
         self.save_config(scores, i_episode)
 
     def plots(self, scores, save_prefix):
-        plot_scores(list(np.mean(scores, axis=1)), path=self.save_path, threshold=self.threshold,
+        if len(np.array(scores).shape) > 1:
+            scores = list(np.mean(scores, axis=1))
+
+        plot_scores(scores, path=self.save_path, threshold=self.threshold,
                     prefix=save_prefix)
+
         if len(self.evaluation_scores) > 0:
             plot_scores(self.evaluation_scores, path=self.save_path, threshold=self.threshold,
                         prefix=save_prefix + '_evaluation')
@@ -223,8 +229,10 @@ class Monitor:
     def save_config(self, scores, i_episode=None):
         self.config["current_episode"] = i_episode
         self.config["training_scores"] = scores
-        self.config["best_training_score"] = np.max(np.mean(np.array(scores), axis=1))
-        self.config["avg_training_score"] = np.mean(np.mean(np.array(scores), axis=1))
+        if len(np.array(scores).shape) > 1:
+            scores = np.mean(np.array(scores), axis=1)
+        self.config["best_training_score"] = np.max(scores)
+        self.config["avg_training_score"] = np.mean(scores)
         if len(self.evaluation_scores) > 0:
             self.config["eval_scores"] = self.evaluation_scores
             self.config["best_eval_score"] = np.max(self.evaluation_scores)

@@ -38,7 +38,7 @@ class MADDPGAgent(BaseAgent):
         super().__init__(state_size, action_size, config)
 
         # General class parameters
-        self.config=config
+        self.config = config
         self.action_space_low = action_space_low
         self.action_space_high = action_space_high
         self.losses = deque(maxlen=int(1e3))  # actor, critic
@@ -82,12 +82,14 @@ class MADDPGAgent(BaseAgent):
         # Warming-up
         elif self.warmup > 0:
             self.warmup -= 1
+            for agent in self.agents: agent.warmup -= 1
             if self.warmup == 0:
                 logger.info(f"End of warm up after {len(self.memory)} steps.")
 
         # Debug mode (activating more logs)
         if self.debug_mode:
             self.debug_it = (self.debug_it + 1) % self.debug_freq
+            for agent in self.agents: agent.debug_it = (agent.debug_it + 1) % agent.debug_freq
 
     def batch_normalization(self, experiences):
         states, actions, rewards, next_states, dones = experiences
@@ -109,9 +111,9 @@ class MADDPGAgent(BaseAgent):
         actions = []
         for i, agent in enumerate(self.agents):
             action = agent.act(state[i, :], eps)
-            # print(action)
+            # print(action.shape)
             actions.append(action)
-        actions = np.array(actions)
+        actions = np.concatenate(actions, axis=0)
         # print("actions:", actions)
         # print(actions.shape)
         return actions
@@ -182,7 +184,7 @@ class MADDPGAgent(BaseAgent):
             # print(f"Q_expected.shape={Q_expected.shape}")
             # print(f"Q_targets.shape={Q_targets.shape}")
             # print(f"Q_targets_next.shape={Q_targets_next.shape}")
-            critic_loss = F.mse_loss(Q_expected, Q_targets)
+            critic_loss = F.mse_loss(Q_expected, Q_targets.detach())  # TODO Check if detach is useful here
 
             # Minimize the loss
             agent.critic_optimizer.zero_grad()
@@ -221,19 +223,24 @@ class MADDPGAgent(BaseAgent):
 
             if self.debug_mode and self.debug_it % self.debug_freq == 0:
                 logger.info(f"DEBUG: AGENT {i}")
-                logger.info(f"states={states}")
-                logger.info(f"actions={actions}")
-                logger.info(f"next_states={next_states}")
-                logger.info(f"actions_next={actions_next}")
-                logger.info(f"Q_targets_next={Q_targets_next}")
-                logger.info(f"Q_expected={Q_expected}")
+                for var in ["states", "actions", "all_actions_next", "all_actions_pred", "next_states", "Q_targets",
+                                "Q_targets_next",
+                                "Q_expected"]:
+                    try:
+                        val = np.array(eval(var).detach())
+                        logger.info(f"mean {var}={np.mean(val, axis=0)}")
+                        logger.info(f"std {var}={np.std(val, axis=0)}")
+                        logger.info(f"size {var}={val.shape}")
+                    except Exception as e:
+                        logger.error(f"Couldnt output debug info for {var}: {e}, {type(eval(var))}")
+                        logger.info(f"{var}={eval(var)}")
+
                 logger.info(f"critic_loss={critic_loss}")
-                logger.info(f"actions_pred={actions_pred}")
                 logger.info(f"actor_loss={actor_loss}")
-                logger.info(f"agent.critic_local={agent.critic_local}")
-                logger.info(f"agent.critic_target={agent.critic_target}")
-                logger.info(f"agent.actor_local={agent.actor_local}")
-                logger.info(f"agent.actor_target={agent.actor_target}")
+                # logger.info(f"agent.critic_local={agent.critic_local}")
+                # logger.info(f"agent.critic_target={agent.critic_target}")
+                # logger.info(f"agent.actor_local={agent.actor_local}")
+                # logger.info(f"agent.actor_target={agent.actor_target}")
         self.avg_loss = np.mean([agent.avg_loss for agent in self.agents], axis=0)
 
     def save(self, filepath):

@@ -25,7 +25,6 @@ import numpy as np
 import logging
 import os
 import pandas as pd
-from pathlib import Path
 import torch
 import torch.nn.functional as F
 
@@ -61,7 +60,7 @@ def main(seed=seed):
     # ---------------------------------------------------------------------------------------------------
     #  Inputs
     # ---------------------------------------------------------------------------------------------------
-    n_episodes = 4000
+    n_episodes = 2500
     config = dict(
         # Environment parameters
         env_name="Tennis",
@@ -75,17 +74,18 @@ def main(seed=seed):
 
         # Agent Parameters
         agent="DDPG",
-        hidden_layers_actor=(256, 256),  # (50, 50, 15),  # (200, 150),  #
+        hidden_layers_actor=(256, 128),  # (50, 50, 15),  # (200, 150),  #
         hidden_layers_critic_body=(256,),  # (50, 50,),  #
-        hidden_layers_critic_head=(256,),  # (50,),   # (300,)
+        hidden_layers_critic_head=(128,),  # (50,),   # (300,)
         func_critic_body="F.leaky_relu",  #
         func_critic_head="F.leaky_relu",  #
         func_actor_body="F.leaky_relu",  #
-        lr_scheduler=None,  #{'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
-                      # 'gamma': 0.5,  # 0.99999,
-                      # 'step_size': 1,
-                      # 'milestones': [15 * 1000 * i for i in range(1, 6)],
-                      # 'max_epochs': n_episodes},
+        # lr_scheduler=None,
+        lr_scheduler={'scheduler_type': "exp", #"multistep",  # "step", "exp" or "decay", "multistep"
+                      'gamma': 0.99999,  #0.75,
+                      'step_size': 1,
+                      # 'milestones': [30 * 1000 * i for i in range(1, 6)],
+                      'max_epochs': n_episodes},
 
         TAU=1e-3,  # for soft update of target parameters
         BUFFER_SIZE=int(3e4),  # replay buffer size
@@ -94,13 +94,13 @@ def main(seed=seed):
         LR_ACTOR=1e-4,  # learning rate of the actor
         LR_CRITIC=1e-4,  # learning rate of the critic
         WEIGHT_DECAY=0,  # L2 weight decay
-        UPDATE_EVERY=2,  # Number of actions before making a learning step
-        N_CONSECUTIVE_LEARNING_STEPS=3,
+        UPDATE_EVERY=1,  # Number of actions before making a learning step
+        N_CONSECUTIVE_LEARNING_STEPS=2,
         action_noise="OU",  #
         action_noise_scale=1,
         weights_noise=None,  #
-        state_normalizer=None,  #"BatchNorm",  # "RunningMeanStd" or "BatchNorm"
-        warmup=1e2,  # Number of random actions to start with as a warm-up
+        state_normalizer="BatchNorm",  # "RunningMeanStd" or "BatchNorm"
+        warmup=1e3,  # Number of random actions to start with as a warm-up
         start_time=str(pd.Timestamp.utcnow()),
         random_seed=seed,
         threshold=0.5
@@ -146,39 +146,40 @@ def main(seed=seed):
     # Unity Monitor
     monitor = UnityMonitor(env=env, config=config)
 
+
+    # Actor model
+    seed = 0
+    actor = SimpleNeuralNetHead(action_size,
+                                SimpleNeuralNetBody(state_size, config["hidden_layers_actor"], seed=seed),
+                                func=torch.tanh, seed=seed)
+    # Critic model
+    critic = DeepNeuralNetHeadCritic(action_size*num_agents,
+                                     SimpleNeuralNetBody(state_size*num_agents, config["hidden_layers_critic_body"],
+                                                         func=eval(config["func_critic_body"]), seed=seed),
+                                     hidden_layers_sizes=config["hidden_layers_critic_head"],
+                                     func=eval(config["func_critic_head"]),
+                                     end_func=None, seed=seed)
+
+    # MADDPG Agent
+    agent = MADDPGAgent(state_size=state_size, action_size=action_size,
+                        model_actor=actor, model_critic=critic,
+                        action_space_low=-1, action_space_high=1,
+                        config=config,
+                        )
+
     if config["mode"] == "train":
-        # Actor model
-        seed = 0
-        actor = SimpleNeuralNetHead(action_size,
-                                    SimpleNeuralNetBody(state_size, config["hidden_layers_actor"], seed=seed),
-                                    func=F.tanh, seed=seed)
-        # Critic model
-        critic = DeepNeuralNetHeadCritic(action_size*num_agents,
-                                         SimpleNeuralNetBody(state_size*num_agents, config["hidden_layers_critic_body"],
-                                                             func=eval(config["func_critic_body"]), seed=seed),
-                                         hidden_layers_sizes=config["hidden_layers_critic_head"],
-                                         func=eval(config["func_critic_head"]),
-                                         end_func=None, seed=seed)
-
-        # MADDPG Agent
-        agent = MADDPGAgent(state_size=state_size, action_size=action_size,
-                            model_actor=actor, model_critic=critic,
-                            action_space_low=-1, action_space_high=1,
-                            config=config,
-                            )
-
         # Training
         start = pd.Timestamp.utcnow()
         scores = monitor.run(agent)
         logger.info("Average Score last 100 episodes: {}".format(np.mean(scores[-100:])))
-        elapsed_time = pd.Timedelta(pd.Timestamp.utcnow() - start).total_seconds()
-        logger.info(f"Elapsed Time: {elapsed_time} seconds")
+        elapsed_time = pd.Timedelta(pd.Timestamp.utcnow() - start)
+        logger.info(f"Elapsed Time: {elapsed_time}")
 
     # ------------------------------------------------------------
     #  3. Testing
     # ------------------------------------------------------------
     else:
-        agent = MADDPGAgent.load(filepath=config['save_path'], mode="test")
+        agent.load(filepath=config['save_path'], mode="test")
         scores = monitor.run(agent)
         logger.info(f"Test Score over {len(scores)} episodes: {np.mean(scores)}")
         config["test_scores"] = scores

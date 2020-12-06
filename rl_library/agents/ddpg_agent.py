@@ -129,30 +129,35 @@ class DDPGAgent(BaseAgent):
 
         return (states, actions, rewards, next_states, dones)
 
-    def warmup_action(self, state):
+    def warmup_action(self):
         # Random action
         if self.n_agents > 1:
-            action = [np.random.uniform(self.action_space_low, self.action_space_high) for _ in range(
-                self.n_agents)]
+            action = np.array([self.action_noise[i].sample() for i in range(self.n_agents)])
         else:
-            action = np.random.uniform(self.action_space_low, self.action_space_high)
-        return action
+            action = self.action_noise[0].sample()
+
+        # Uniformly Random Action
+        # if self.n_agents > 1:
+        #     action = [np.random.uniform(self.action_space_low, self.action_space_high) for _ in range(
+        #         self.n_agents)]
+        # else:
+        #     action = np.random.uniform(self.action_space_low, self.action_space_high)
+        action = np.clip(action, self.action_space_low, self.action_space_high)
+        return action.reshape((1, len(action)))
 
     def act(self, state, eps: float = 0):
         """Returns actions for given state as per current policy."""
         # Warm-up = Random action
         if self.warmup > 0:
-            if self.n_agents>1:
-                action = np.array([eps * self.action_noise[i].sample() for i in range(self.n_agents)])
-            else:
-                action = self.action_noise[0].sample()
-            # action = self.warmup_action(state)
+            action = self.warmup_action()
             return action
 
         if self.state_normalizer:
             state = self.state_normalizer(state, read_only=True)
 
         state = torch.from_numpy(state).float().to(device)
+        if len(state.size()) == 1:
+            state = state.unsqueeze(0)
 
         self.actor_local.eval()
         with torch.no_grad():

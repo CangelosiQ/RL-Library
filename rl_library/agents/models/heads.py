@@ -41,6 +41,7 @@ class SimpleNeuralNetHead(nn.Module):
 
     def forward(self, x):
         """Build a network that maps state -> action values."""
+        # print(x.size())
         if self.bn:
             x = self.bn(x)
         x = self.body(x)
