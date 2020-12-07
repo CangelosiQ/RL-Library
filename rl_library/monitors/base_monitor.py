@@ -192,6 +192,7 @@ class Monitor:
         elif self.mode == "train" and self.save_path and len(scores)>100 and self.threshold:
             new_score = np.mean(scores[-100:])
             if new_score > self.threshold and new_score > self.best_score_rolling100:
+                self.best_score_rolling100 = new_score
                 logger.warning(f'\n========>>> New Best Score {i_episode} episodes!\tAverage '
                                f'Score: {new_score:.2f}')
                 self._save_training(agent, scores, save_prefix, save_path=self.save_path+"/best")

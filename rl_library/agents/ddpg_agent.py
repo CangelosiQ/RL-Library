@@ -120,12 +120,9 @@ class DDPGAgent(BaseAgent):
         if self.state_normalizer:
             states = self.state_normalizer(states)
             next_states = self.state_normalizer(next_states)
-            # states = torch.from_numpy(states).float().to(device)
-            # next_states = torch.from_numpy(next_states).float().to(device)
 
         if self.reward_normalizer:
             rewards = self.reward_normalizer(rewards)
-            rewards = torch.from_numpy(rewards).float().to(device)
 
         return (states, actions, rewards, next_states, dones)
 
@@ -161,32 +158,11 @@ class DDPGAgent(BaseAgent):
 
         self.actor_local.eval()
         with torch.no_grad():
-            # if add_noise and self.t_step == 0:
-            #     previous_weights = {}
-            #     for l, noise in zip(self.actor_local.body.layers, self.parameter_noise):
-            #         #         # print(f"before {np.mean(l.weight.data.numpy())}")
-            #         if random.random() < eps:  # Only affect some layers at a time
-            #             # l.weight.data += eps/10 * (torch.tensor(np.random.random(l.weight.data.size())-0.5))
-            #             # std = max(min(np.std(l.weight.data.numpy()), 1), 0.1)
-            #             # random_noise = eps * (torch.tensor((np.random.random(l.weight.data.numpy().shape)-0.5)*std))
-            #             random_noise = eps * (torch.tensor(noise.sample()))
-            #             # print(f"l.weight.data: {l.weight.data}")
-            #             # print(f"Noise: {random_noise}")
-            #             previous_weights[l] = copy.deepcopy(l.weight.data)
-            #             l.weight.data += random_noise
-
-            # print(f"after {np.mean(l.weight.data.numpy())}")
-            # action = [self.actor_local(state).cpu().data.numpy() for _ in range(self.n_agents)]
             action = self.actor_local(state).cpu().data.numpy()
             if self.debug_mode and self.debug_it % self.debug_freq == 0:
                 logger.info(f"DEBUG: act()")
                 logger.info(f"State= {state}")
                 logger.info(f"Action={action}")
-
-            # if add_noise and self.t_step == 0:
-            #     for l, noise in zip(self.actor_local.body.layers, self.parameter_noise):
-            #         if l in previous_weights:
-            #             l.weight.data = previous_weights[l]
 
         if self.action_noise is not None and self.training:
             if self.n_agents > 1:
@@ -202,9 +178,6 @@ class DDPGAgent(BaseAgent):
         action = np.clip(action, self.action_space_low, self.action_space_high)
         if self.debug_mode and self.debug_it % self.debug_freq == 0:
             logger.info(f"Clipped Action: {action}")
-
-        # if self.n_agents == 1:
-        #     action = action[0]
 
         self.actor_local.train()
         return action

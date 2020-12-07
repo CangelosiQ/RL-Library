@@ -107,7 +107,6 @@ class MADDPGAgent(BaseAgent):
 
     def act(self, state, eps: float = 0):
         """Returns actions for given state as per current policy."""
-        # print(f"state={state.shape}")
         actions = []
         for i, agent in enumerate(self.agents):
             action = agent.act(state[i, :], eps)

@@ -184,7 +184,8 @@ def main(seed=seed):
         env.reset(train_mode=False)
         env.warmup = 0
         agent.warmup = 0
-        agent.load(filepath=".", mode="test")
+        for a in agent.agents: a.warmup = 0
+        agent.load(filepath="./assets/best_agent", mode="test")
         scores = monitor.run(agent)
         logger.info(f"Test Score over {len(scores)} episodes: {np.mean(scores)}")
         config["test_scores"] = scores
