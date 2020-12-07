@@ -51,7 +51,7 @@ class Monitor:
         self.start = pd.Timestamp.utcnow()
         self.n_agents = config.get("n_agents", 1)
         self.func_scoring = np.max
-
+        self.best_score_rolling100 = -np.inf
 
     def reset(self):
         state = self.reset_env()
@@ -83,7 +83,7 @@ class Monitor:
             with open(self.reload_path + "/scores.pickle", "rb") as f:
                 scores_history = pickle.load(f)
 
-        scores_window = deque(maxlen=100) # last 100 scores
+        scores_window = deque(maxlen=100)  # last 100 scores
         self.evaluation_scores = []
         eps = self.eps_start  # initialize epsilon
         t = None
@@ -96,12 +96,12 @@ class Monitor:
             # Turn ON Evaluation Episode
             if self.evaluate_every is not None and i_episode % self.evaluate_every == 0:
                 logger.warning("Evaluation episode ACTIVATED")
-                agent.training = False # TODO Not working for MADDPG use function instead
+                agent.training = False  # TODO Not working for MADDPG use function instead
 
             for t in range(int(self.length_episode)):
-                action = agent.act(state, eps=eps)
+                action = agent.act(state, eps=eps * int(self.mode == "train"))
 
-                #print(f"\rAction: {action} Processed: {self.process_action(action)}", end="")
+                # print(f"\rAction: {action} Processed: {self.process_action(action)}", end="")
                 next_state, reward, done, _ = self.env_step(self.process_action(action))  # send the action to the
                 # last_actions.append(action)
                 # last_states.append(state)
@@ -129,7 +129,7 @@ class Monitor:
                 state = next_state
                 scores += reward
 
-                done = [done,] if type(done) is not list else done
+                done = [done, ] if type(done) is not list else done
                 if any(done):
                     break
 
@@ -170,7 +170,7 @@ class Monitor:
               f'({n_steps} ' \
               f'steps), ' \
               f'eps: {eps:.2f}'
-        if i_episode % 100 == 0:
+        if i_episode % 250 == 0:
             logger.info(log)
             logger.info(str(agent))
         if i_episode % 25 == 0:
@@ -179,7 +179,7 @@ class Monitor:
             logger.debug(log)
 
         if self.threshold and np.mean(scores_window) >= self.threshold and self.mode == "train" and not solved:
-            logger.warning(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score:'
+            logger.warning(f'\n========>>> Environment solved in {i_episode} episodes!\tAverage Score:'
                            f' {np.mean(scores_window):.2f}')
             solved = True
         return solved
@@ -188,22 +188,34 @@ class Monitor:
         if self.save_every and self.mode == "train" and self.save_path and i_episode % self.save_every == 0:
             self._save_training(agent, scores, save_prefix, i_episode)
 
+        # Save best model
+        elif self.mode == "train" and self.save_path and len(scores)>100 and self.threshold:
+            new_score = np.mean(scores[-100:])
+            if new_score > self.threshold and new_score > self.best_score_rolling100:
+                logger.warning(f'\n========>>> New Best Score {i_episode} episodes!\tAverage '
+                               f'Score: {new_score:.2f}')
+                self._save_training(agent, scores, save_prefix, save_path=self.save_path+"/best")
+
     def save_and_plot(self, scores, agent, save_prefix):
         if self.save_path and self.mode == "train":
             self._save_training(agent, scores, save_prefix)
         elif self.mode == "test":
-            plot_scores(list(np.mean(scores, axis=1)), path=".", threshold=self.threshold, prefix=save_prefix)
+            if len(np.array(scores).shape) > 1:
+                scores = np.mean(scores, axis=1)
+            plot_scores(list(scores), path=".", threshold=self.threshold, prefix=save_prefix)
 
-    def _save_training(self, agent, scores, save_prefix, i_episode=None):
-        logger.info(f'Saving model to {self.save_path}')
-        if not os.path.exists(self.save_path):
-            os.makedirs(self.save_path, exist_ok=True)
+    def _save_training(self, agent, scores, save_prefix, i_episode=None, save_path=None):
+        if save_path is None:
+            save_path = self.save_path
+        logger.info(f'Saving model to {save_path}')
+        if not os.path.exists(save_path):
+            os.makedirs(save_path, exist_ok=True)
 
         # Save agent
-        agent.save(filepath=self.save_path)
+        agent.save(filepath=save_path)
 
         # Save scores
-        with open(self.save_path + "/scores.pickle", "wb") as f:
+        with open(save_path + "/scores.pickle", "wb") as f:
             pickle.dump(scores, f)
 
         # Plot scores

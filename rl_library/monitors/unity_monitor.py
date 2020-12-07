@@ -35,12 +35,12 @@ class UnityMonitor(Monitor):
 
     def reset_env(self):
         # reset the environment
-        env_info = self.env.reset(train_mode=True)[self.brain_name]
+        env_info = self.env.reset(train_mode=self.mode == "train")[self.brain_name]
         return env_info.vector_observations
 
     def env_step(self, action):
         env_info = self.env.step(self.process_action(action))[self.brain_name]  # send the action to the environment
-        next_state = env_info.vector_observations # get the next state
+        next_state = env_info.vector_observations  # get the next state
         reward = env_info.rewards  # get the reward
         done = env_info.local_done  # see if episode has finished
         return next_state, reward, done, None

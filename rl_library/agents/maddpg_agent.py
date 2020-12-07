@@ -47,7 +47,7 @@ class MADDPGAgent(BaseAgent):
         self.training = True
         self.n_agents = config.get("n_agents", 1)
         self.debug_mode = debug_mode
-        self.debug_freq = 5000
+        self.debug_freq = 50000
         self.debug_it = 1
         self.BUFFER_SIZE = config.get("BUFFER_SIZE", int(1e5))  # replay buffer size
         self.BATCH_SIZE = config.get("BATCH_SIZE", 128)  # minibatch size

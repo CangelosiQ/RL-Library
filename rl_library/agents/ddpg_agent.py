@@ -36,7 +36,7 @@ class DDPGAgent(BaseAgent):
         super().__init__(state_size, action_size, config)
 
         # General class parameters
-        self.config=config
+        self.config = config
         self.action_space_low = action_space_low
         self.action_space_high = action_space_high
         self.losses = deque(maxlen=int(1e3))  # actor, critic
@@ -44,7 +44,7 @@ class DDPGAgent(BaseAgent):
         self.training = True
         self.n_agents = config.get("n_agents", 1)
         self.debug_mode = debug_mode
-        self.debug_freq = 10000
+        self.debug_freq = 50000
         self.debug_it = 1
 
         # Hyper Parameters
@@ -189,10 +189,10 @@ class DDPGAgent(BaseAgent):
             #             l.weight.data = previous_weights[l]
 
         if self.action_noise is not None and self.training:
-            if self.n_agents>1:
+            if self.n_agents > 1:
                 noise = np.array([eps * self.action_noise[i].sample() for i in range(self.n_agents)])
             else:
-                noise = self.action_noise[0].sample()
+                noise = eps * self.action_noise[0].sample()
 
             action += noise
             if self.debug_mode and self.debug_it % self.debug_freq == 0:
@@ -416,13 +416,13 @@ class DDPGAgent(BaseAgent):
         # if self.n_agents >1:
         #     size = (self.n_agents, self.action_size)
         # else:
-        size = (self.action_size, )
+        size = (self.action_size,)
 
         # Noise process
         if "action_noise" in config:
             if config["action_noise"] == "OU":
-                self.action_noise = [OUNoise(size, self.seed*i, scale=config.get("action_noise_scale",
-                                                                                      1)) for i in range(self.n_agents)]
+                self.action_noise = [OUNoise(size, self.seed * i, scale=config.get("action_noise_scale",
+                                                                                   1)) for i in range(self.n_agents)]
             elif config["action_noise"] == "normal":
                 self.action_noise = [NormalActionNoise(size=size) for _ in range(self.n_agents)]
             else:
@@ -455,7 +455,7 @@ class DDPGAgent(BaseAgent):
             'optimizer_critic': self.critic_optimizer.state_dict()
         }
 
-        torch.save(checkpoint, filepath+'/checkpoint.pth')
+        torch.save(checkpoint, filepath + '/checkpoint.pth')
 
     def load(self, filepath, mode="test"):
         logger.info(f"Loading Agent from {filepath}")
@@ -478,9 +478,6 @@ class DDPGAgent(BaseAgent):
 
         self.actor_optimizer.load_state_dict(checkpoint["optimizer_actor"])
         self.critic_optimizer.load_state_dict(checkpoint["optimizer_critic"])
-
-
-
 
     def __str__(self):
         s = f"DDPG Agent: \n" \

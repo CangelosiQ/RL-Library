@@ -116,9 +116,7 @@ def main(seed=seed):
     actor = SimpleNeuralNetHead(action_size,
                                 SimpleNeuralNetBody(state_size, config["hidden_layers_actor"], seed=seed),
                                 func=F.tanh, seed=seed)
-    actor_target = SimpleNeuralNetHead(action_size,
-                                       SimpleNeuralNetBody(state_size, config["hidden_layers_actor"], seed=seed),
-                                       func=F.tanh, seed=seed)
+
     # Critic model
     critic = DeepNeuralNetHeadCritic(action_size,
                                      SimpleNeuralNetBody(state_size, config["hidden_layers_critic_body"],
@@ -127,17 +125,9 @@ def main(seed=seed):
                                      func=eval(config["func_critic_head"]),
                                      end_func=None, seed=seed)
 
-    critic_target = DeepNeuralNetHeadCritic(action_size,
-                                            SimpleNeuralNetBody(state_size, config["hidden_layers_critic_body"],
-                                                                func=eval(config["func_critic_body"]), seed=seed),
-                                            hidden_layers_sizes=config["hidden_layers_critic_head"],
-                                            func=eval(config["func_critic_head"]),
-                                            end_func=None, seed=seed)
-
     # DDPG Agent
     agent = DDPGAgent(state_size=state_size, action_size=action_size,
                       model_actor=actor, model_critic=critic,
-                      actor_target=actor_target, critic_target=critic_target,
                       action_space_low=-1, action_space_high=1,
                       config=config,
                       )

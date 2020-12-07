@@ -52,7 +52,7 @@ def main(seed=seed):
     logger = logging.getLogger()
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
 
-    handler = logging.FileHandler(f"{save_path}/logs_navigation_{pd.Timestamp.utcnow().value}.log")
+    handler = logging.FileHandler(f"{save_path}/logs_p3_{pd.Timestamp.utcnow().value}.log")
     handler.setLevel(logging.DEBUG)
     handler.setFormatter(formatter)
     logger.addHandler(handler)
@@ -68,7 +68,7 @@ def main(seed=seed):
         length_episode=1500,
         save_every=500,
         save_path=save_path,
-        mode="train",  # "train" or "test"
+        mode="test",  # "train" or "test"
         evaluate_every=5000,  # Number of training episodes before 1 evaluation episode
         eps_decay=1,  # Epsilon decay rate
 
@@ -179,7 +179,12 @@ def main(seed=seed):
     #  3. Testing
     # ------------------------------------------------------------
     else:
-        agent.load(filepath=config['save_path'], mode="test")
+        logger.warning("Entering Test Mode!")
+        monitor.n_episodes = 100
+        env.reset(train_mode=False)
+        env.warmup = 0
+        agent.warmup = 0
+        agent.load(filepath=".", mode="test")
         scores = monitor.run(agent)
         logger.info(f"Test Score over {len(scores)} episodes: {np.mean(scores)}")
         config["test_scores"] = scores
