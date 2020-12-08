@@ -1,20 +1,13 @@
 import os
 from collections import deque
-
 import numpy as np
-import random
-import copy
 import torch
 import torch.nn.functional as F
-import torch.optim as optim
 import torch.nn as nn
-from torch.optim import lr_scheduler
 import logging
 
 from rl_library.agents.base_agent import BaseAgent
 from rl_library.agents.ddpg_agent import DDPGAgent
-from rl_library.utils.noises import OUNoise, NormalActionNoise
-from rl_library.utils.normalizer import MeanStdNormalizer, RunningMeanStd
 from rl_library.utils.replay_buffers import ReplayBuffer
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -143,18 +136,11 @@ class MADDPGAgent(BaseAgent):
             all_states = torch.reshape(states, (states.size(0), -1))
             all_next_states = torch.reshape(next_states, (next_states.size(0), -1))
 
-            # print(f"SAMPLE:"
-            #       f"\nstates={states.size()}"
-            #       f"\nactions={actions.size()}"
-            #       f"\nnext_states={next_states.size()}"
-            #       f"\ndones={dones.size()}"
-            #       f"\nrewards={rewards.size()}"
-            #       )
             # ---------------------------- update critic ---------------------------- #
             # Get predicted next-state actions and Q values from target models FOR EACH AGENT
             actions_next = []
             actions_pred = []
-            # with torch.no_grad():
+
             for j, _agent in enumerate(self.agents):
                 agent_actions_next = _agent.actor_target(next_states[:, j, :])
                 agent_actions_pred = _agent.actor_local(states[:, j, :])
@@ -164,14 +150,6 @@ class MADDPGAgent(BaseAgent):
             all_actions_next = torch.cat(actions_next, dim=1)
             all_actions_next = torch.reshape(all_actions_next, (all_actions_next.size(0), -1))
 
-            # print(f"all_actions= {all_actions.size()}")
-            # print(f"all_actions_next= {all_actions_next.size()}")
-            # print(f"all_states.size()={all_states.size()}")
-            # print(f"all_next_states.size()={all_next_states.size()}")
-            # print(f"states[:, i, :]={states[:, i, :].size()}")
-            # print(f"actions[:, i, :]={actions[:, i, :].size()}")
-            # print(f"rewards[:, i]={rewards[:, i].size()}")
-            # print(f"dones[:, i]={dones[:, i].size()}")
             with torch.no_grad():
                 Q_targets_next = agent.critic_target(all_next_states, all_actions_next)
 
@@ -180,10 +158,8 @@ class MADDPGAgent(BaseAgent):
 
             # Compute critic loss
             Q_expected = agent.critic_local(all_states, all_actions)
-            # print(f"Q_expected.shape={Q_expected.shape}")
-            # print(f"Q_targets.shape={Q_targets.shape}")
-            # print(f"Q_targets_next.shape={Q_targets_next.shape}")
-            critic_loss = F.mse_loss(Q_expected, Q_targets.detach())  # TODO Check if detach is useful here
+
+            critic_loss = F.mse_loss(Q_expected, Q_targets.detach())
 
             # Minimize the loss
             agent.critic_optimizer.zero_grad()
@@ -236,10 +212,7 @@ class MADDPGAgent(BaseAgent):
 
                 logger.info(f"critic_loss={critic_loss}")
                 logger.info(f"actor_loss={actor_loss}")
-                # logger.info(f"agent.critic_local={agent.critic_local}")
-                # logger.info(f"agent.critic_target={agent.critic_target}")
-                # logger.info(f"agent.actor_local={agent.actor_local}")
-                # logger.info(f"agent.actor_target={agent.actor_target}")
+
         self.avg_loss = np.mean([agent.avg_loss for agent in self.agents], axis=0)
 
     def save(self, filepath):

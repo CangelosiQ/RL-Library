@@ -65,19 +65,41 @@ Then, place the file in the `p3_collab-compet/` folder in the DRLND GitHub repos
 
 
 ## 2. Project Submission
-In the following section, I will provide information going through the list of [criteria](https://review.udacity.com/#!/rubrics/1890/view) for the project.
+In the following section, I will provide information going through the list of [criteria](https://review.udacity.com/#!/rubrics/1891/view) for the project.
 
 ### Training Code
-The code for this project is located under `examples/navigation`.
-To train the agent you can run either `Navigation.ipynb` or `Navigation.py`. My working environment for this project was the python script while the python notebook was used to describe the code and its outputs to the reviewers.
+The code for this project is located under `examples/p3_collab-compet`.
+To train the agent you can run either `Tennis.ipynb` or `Tennis.py`. My working environment for this project was the python script while the python notebook was used to describe the code and its outputs to the reviewers.
 
 
 **Framework**: The code is written in PyTorch and Python 3.
 
-**Saved Model Weights**: The model weights are saved under `examples/navigation/DDQN_20_15_8/checkpoint.pth` and can be easily loaded when running `Navigation.ipynb` or `Navigation.py` with `mode="test"`
+**Saved Model Weights**: The model weights are saved under `examples/p3_collab-compet/assets/best_agent/` and can be easily loaded when running `Tennis.ipynb` or `Tennis_test.py`.
 
 ### README
 This is exactly the file currently being read :-) describing the project environment details, providing instructions for installing dependencies and on how to run the code in the repository, to train the agent.
 
 ### Report
-The report for this project is `examples/navigation/Report.md`.
+The report for this project is [`examples/p3_collab-compet/Report.md`](./Report.md).
+
+
+## 3. Installation Guide
+
+
+In order to run the examples with UnityAgents, please install the dependencies located under *setup_unityagents* by running the following commands:
+
+    cd setup_unityagents
+    pip install .
+
+Then install the package dependencies by running **after going back to the root of the repository** (e.g. by running `cd ..`)
+
+    pip install -r requirements.txt
+
+Finally, install the rl_library package by running
+
+    pip install .
+or for development mode:
+    
+    pip install -e .
+
+For more details on the repository structure and installation steps please refer to the main README file [here](../../README.md).

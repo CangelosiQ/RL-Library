@@ -7,11 +7,6 @@
 In this notebook, you will learn how to use the Unity ML-Agents environment for the third project of the
 [Deep Reinforcement Learning Nanodegree](https://www.udacity.com/course/deep-reinforcement-learning-nanodegree--nd893)
 program.
-
-
-TODO:
-    -
-
 """
 
 # ---------------------------------------------------------------------------------------------------
@@ -106,7 +101,6 @@ def main():
     # Unity Monitor
     monitor = UnityMonitor(env=env, config=config)
 
-
     # Actor model
     seed = 0
     actor = SimpleNeuralNetHead(action_size,
@@ -126,7 +120,6 @@ def main():
                         action_space_low=-1, action_space_high=1,
                         config=config,
                         )
-
 
     # ------------------------------------------------------------
     #  3. Testing

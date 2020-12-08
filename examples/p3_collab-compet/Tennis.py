@@ -8,10 +8,6 @@ In this notebook, you will learn how to use the Unity ML-Agents environment for 
 [Deep Reinforcement Learning Nanodegree](https://www.udacity.com/course/deep-reinforcement-learning-nanodegree--nd893)
 program.
 
-
-TODO:
-    -
-
 """
 
 # ---------------------------------------------------------------------------------------------------
@@ -113,8 +109,6 @@ def main(seed=seed):
     #  1. Initialization
     # ------------------------------------------------------------
     # 1. Start the Environment
-
-    # env = UnityEnvironment(file_name=f'./Reacher_Linux_2/Reacher.x86_64')  # Linux
     env = UnityEnvironment(file_name=f'./{config["env_name"]}')  # mac OS
 
     # get the default brain

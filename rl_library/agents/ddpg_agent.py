@@ -1,7 +1,5 @@
 from collections import deque
-
 import numpy as np
-import random
 import copy
 import torch
 import torch.nn.functional as F
@@ -85,8 +83,6 @@ class DDPGAgent(BaseAgent):
 
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
-        # logger.debug(f"State= {state}, Action={action}, Reward={reward}, done={done}")
-
         # For each agent, save experience / reward
         if len(state.shape) > 1:
             for i in range(state.shape[0]):
