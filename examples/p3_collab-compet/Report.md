@@ -15,15 +15,19 @@ As for the other two projects, the source code to solve this second project is w
 
 The entry-points to solve this project are the notebook and script `examples/p3_collab-compet/Tennis(.py/.ipynb)`. The python script being the version used during development and the notebook being a replicate allowing reviewers to visualize the outputs.  
 
-It is also possible to run the test script `examples/p2_continuous-control/Continuous_Control_test.py` to directly watch a trained agent over 10 episodes of the environment.
+It is also possible to run the test script `examples/p3_collab-compet/Tennis_test.py` to directly watch a trained agent over 100 episodes of the environment.
 
-The DDPG agent is implemented under `rl_library/agents/ddpg_agent.py` and is based on the example provided in the nanodegree to solve the Bipedal-Walker environment. The pytorch models for the Actor and the Critic networks are instanciated from the scripts `rl_library/agents/models/heads.py` and `rl_library/agents/models/body.py`. Various utils used by the DDPG agent are located under `rl_library/utils` as the normalizers, replay buffer, noise classes and visualization methods.
+The MADDPG agent is implemented under `rl_library/agents/maddpg_agent.py` and is based on the original [paper](https://arxiv.org/abs/1706.02275v4). The DDPG agents are reused from the second project on Continuous Control and located at `rl_library/agents/ddpg_agent.py`. The pytorch models for the Actor and the Critic networks are instanciated from the scripts `rl_library/agents/models/heads.py` and `rl_library/agents/models/body.py`. Various utils used by the MADDPG and DDPG agents are located under `rl_library/utils` as the normalizers, replay buffer, noise classes and visualization methods.
 
 
 
 ## Methods and Algorithms
 
 ### Method
+
+To solve the Tennis problem, where two agents are playing tennis and getting rewards by hitting the ball over the net, I decided to implement the Multi-Agent DDPG algorithm described in the [Ryan Lowe et al.](https://arxiv.org/abs/1706.02275v4) paper. Indeed the problem can be separated in two independent agents that have to collaborate to maximise their rewards, as both agents want to exchange the ball as much as possible during one episode. The agents have two continuous actions each, moving forward/backward and jumping. As such, the code implemented to solve the continuous control problem in the second project of the nanodegree can be heavily leveraged to solve the Tennis problem.  
+
+
 
 [DDPG paper](https://arxiv.org/abs/1509.02971)
 
@@ -53,7 +57,9 @@ All experiments are run over 300 episodes (with the exception of few initial exp
 
 In the following figure, we compare the baseline scores to various experiments which will be described below. All curves shown are rolling averages of the average score of the 20 agents with a rolling size of 20 episodes. There are figures named  "baseline", "baseline 2" and "baseline 3" which are repetitions of the baseline described above, shown to depict the variability from one run to another. Of course, a serious analysis would have required to run every experiment multiple times (e.g. 5) and show the average in order to reduce this variability and better compare actual performances impacts.
 
-![Alt Text](solutions_comparison.png)
+![Alt Text](assets/benchmark_100.png)
+![Alt Text](assets/benchmark_200.png)
+
 
 
 
@@ -120,7 +126,11 @@ Please read section Methods and Algorithms.
 #### Plot of Rewards
     A plot of rewards per episode is included to illustrate that the agent is able to receive an average reward (over 100 episodes) of at least +13. The submission reports the number of episodes needed to solve the environment.
 
+##### Training Scores:
 ![Alt Text](assets/Tennis_MADDPGAgent_scores.png)
+
+##### Test Scores:
+![Alt Text](assets/Tennis_MADDPGAgent_test_scores.png)
 
 #### Ideas for Future Work
     The submission has concrete future ideas for improving the agent's performance.
