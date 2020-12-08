@@ -8,3 +8,8 @@ torch==1.6.0
 
 # OpenAI Gym
 gym==0.17.2
+
+tensorboard==1.7.0
+tensorboard-pytorch==0.7.1
+
+

@@ -38,7 +38,8 @@ class BaseAgent:
         return state
 
     def act(self, state, eps=0.):
-        return np.random.choice(range(self.action_size))
+        # return np.random.choice(range(self.action_size))
+        return np.random.random(self.action_size)
 
     def learn(self, experiences):
         pass
@@ -48,4 +49,7 @@ class BaseAgent:
 
     @classmethod
     def load(cls, filepath, mode="train"):
+        pass
+
+    def reset(self):
         pass

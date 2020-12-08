@@ -23,7 +23,7 @@ class Monitor:
     def __init__(self, config: dict):
         self.config = config
         self.env_name = config["env_name"]
-        self.env = None
+        self.env = config.get("env")
         self.seed = config.get("random_seed", 42)
 
         self.threshold = config.get("threshold")
@@ -50,6 +50,8 @@ class Monitor:
         self.evaluate_every = config.get("evaluate_every")
         self.start = pd.Timestamp.utcnow()
         self.n_agents = config.get("n_agents", 1)
+        self.func_scoring = np.max
+        self.best_score_rolling100 = -np.inf
 
     def reset(self):
         state = self.reset_env()
@@ -81,7 +83,7 @@ class Monitor:
             with open(self.reload_path + "/scores.pickle", "rb") as f:
                 scores_history = pickle.load(f)
 
-        scores_window = deque(maxlen=100) # last 100 scores
+        scores_window = deque(maxlen=100)  # last 100 scores
         self.evaluation_scores = []
         eps = self.eps_start  # initialize epsilon
         t = None
@@ -94,10 +96,10 @@ class Monitor:
             # Turn ON Evaluation Episode
             if self.evaluate_every is not None and i_episode % self.evaluate_every == 0:
                 logger.warning("Evaluation episode ACTIVATED")
-                agent.training = False
+                agent.training = False  # TODO Not working for MADDPG use function instead
 
             for t in range(int(self.length_episode)):
-                action = agent.act(state, eps=eps)
+                action = agent.act(state, eps=eps * int(self.mode == "train"))
 
                 # print(f"\rAction: {action} Processed: {self.process_action(action)}", end="")
                 next_state, reward, done, _ = self.env_step(self.process_action(action))  # send the action to the
@@ -127,7 +129,7 @@ class Monitor:
                 state = next_state
                 scores += reward
 
-                done = [done,] if type(done) is not list else done
+                done = [done, ] if type(done) is not list else done
                 if any(done):
                     break
 
@@ -142,8 +144,8 @@ class Monitor:
                 if self.mode == "train" and not agent.step_every_action:
                     agent.step(list_states, list_actions, list_rewards)
 
-            scores_window.append(scores)  # save most recent score
-            scores_history.append(scores)  # save most recent score
+            scores_window.append(self.func_scoring(scores))  # save most recent score
+            scores_history.append(self.func_scoring(scores))  # save most recent score
             eps = max(self.eps_end, self.eps_decay * eps)  # decrease epsilon
             solved = self.logging(i_episode, scores_window, scores, eps, solved, agent, t)
 
@@ -158,24 +160,26 @@ class Monitor:
     def logging(self, i_episode, scores_window, score, eps, solved, agent, n_steps):
         self.agent_losses.append(agent.avg_loss)
 
-        if len(self.agent_losses) < 100:
+        if len(self.agent_losses) <= 100:
             mean_loss = np.mean(np.array(self.agent_losses[:len(self.agent_losses)]), axis=0)
         else:
             mean_loss = np.mean(np.array(self.agent_losses[:-100]), axis=0)
 
-        log = f'Episode {i_episode}    Average Score: {np.mean(scores_window):.2f}, Agent Loss: ' \
-              f'{mean_loss}, Last Score: avg={np.mean(score):.2f}, min={min(score):.2f}, max={max(score):.2f} ' \
+        log = f'Episode {i_episode}    Average Score: {np.mean(scores_window):.2e}, Agent Loss: ' \
+              f'{mean_loss}, Last Score: avg={np.mean(score):.2e}, min={min(score):.2e}, max={max(score):.2e} ' \
               f'({n_steps} ' \
               f'steps), ' \
               f'eps: {eps:.2f}'
-        if i_episode % 25 == 0:
+        if i_episode % 250 == 0:
             logger.info(log)
             logger.info(str(agent))
-        else:
+        if i_episode % 25 == 0:
             logger.info(log)
+        else:
+            logger.debug(log)
 
         if self.threshold and np.mean(scores_window) >= self.threshold and self.mode == "train" and not solved:
-            logger.warning(f'\nEnvironment solved in {i_episode} episodes!\tAverage Score:'
+            logger.warning(f'\n========>>> Environment solved in {i_episode} episodes!\tAverage Score:'
                            f' {np.mean(scores_window):.2f}')
             solved = True
         return solved
@@ -184,22 +188,35 @@ class Monitor:
         if self.save_every and self.mode == "train" and self.save_path and i_episode % self.save_every == 0:
             self._save_training(agent, scores, save_prefix, i_episode)
 
+        # Save best model
+        elif self.mode == "train" and self.save_path and len(scores)>100 and self.threshold:
+            new_score = np.mean(scores[-100:])
+            if new_score > self.threshold and new_score > self.best_score_rolling100:
+                self.best_score_rolling100 = new_score
+                logger.warning(f'\n========>>> New Best Score {i_episode} episodes!\tAverage '
+                               f'Score: {new_score:.2f}')
+                self._save_training(agent, scores, save_prefix, save_path=self.save_path+"/best")
+
     def save_and_plot(self, scores, agent, save_prefix):
         if self.save_path and self.mode == "train":
             self._save_training(agent, scores, save_prefix)
         elif self.mode == "test":
-            plot_scores(list(np.mean(scores, axis=1)), path=".", threshold=self.threshold, prefix=save_prefix)
+            if len(np.array(scores).shape) > 1:
+                scores = np.mean(scores, axis=1)
+            plot_scores(list(scores), path=".", threshold=self.threshold, prefix=save_prefix)
 
-    def _save_training(self, agent, scores, save_prefix, i_episode=None):
-        logger.info(f'Saving model to {self.save_path}')
-        if not os.path.exists(self.save_path):
-            os.makedirs(self.save_path, exist_ok=True)
+    def _save_training(self, agent, scores, save_prefix, i_episode=None, save_path=None):
+        if save_path is None:
+            save_path = self.save_path
+        logger.info(f'Saving model to {save_path}')
+        if not os.path.exists(save_path):
+            os.makedirs(save_path, exist_ok=True)
 
         # Save agent
-        agent.save(filepath=self.save_path)
+        agent.save(filepath=save_path)
 
         # Save scores
-        with open(self.save_path + "/scores.pickle", "wb") as f:
+        with open(save_path + "/scores.pickle", "wb") as f:
             pickle.dump(scores, f)
 
         # Plot scores
@@ -210,8 +227,12 @@ class Monitor:
         self.save_config(scores, i_episode)
 
     def plots(self, scores, save_prefix):
-        plot_scores(list(np.mean(scores, axis=1)), path=self.save_path, threshold=self.threshold,
+        if len(np.array(scores).shape) > 1:
+            scores = list(np.mean(scores, axis=1))
+
+        plot_scores(scores, path=self.save_path, threshold=self.threshold,
                     prefix=save_prefix)
+
         if len(self.evaluation_scores) > 0:
             plot_scores(self.evaluation_scores, path=self.save_path, threshold=self.threshold,
                         prefix=save_prefix + '_evaluation')
@@ -221,8 +242,10 @@ class Monitor:
     def save_config(self, scores, i_episode=None):
         self.config["current_episode"] = i_episode
         self.config["training_scores"] = scores
-        self.config["best_training_score"] = np.max(np.mean(np.array(scores), axis=1))
-        self.config["avg_training_score"] = np.mean(np.mean(np.array(scores), axis=1))
+        if len(np.array(scores).shape) > 1:
+            scores = np.mean(np.array(scores), axis=1)
+        self.config["best_training_score"] = np.max(scores)
+        self.config["avg_training_score"] = np.mean(scores)
         if len(self.evaluation_scores) > 0:
             self.config["eval_scores"] = self.evaluation_scores
             self.config["best_eval_score"] = np.max(self.evaluation_scores)

@@ -62,3 +62,8 @@ cf. README [here](examples/p1-navigation/README.md)
 # Project 2: Continuous Control
 cf. README [here](./examples/p2_continuous-control/README.md)
 
+
+# Project 3: Collaboration and Competition
+
+cf. README [here](./examples/p3_collab-compet/README.md)
+

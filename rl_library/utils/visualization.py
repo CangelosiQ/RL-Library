@@ -14,7 +14,7 @@ def plot_scores(scores, rolling_window="auto", path: str = '.', threshold=None, 
         return
 
     if rolling_window == "auto":
-        rolling_window = round(len(scores) / 4)
+        rolling_window = min(round(len(scores) / 4), 100)
 
     plt.figure(figsize=(15, 8))
     if type(scores[0]) not in [float, int, np.float64, np.int64] and len(scores[0]) > 1:

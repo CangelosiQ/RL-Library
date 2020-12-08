@@ -56,7 +56,7 @@ def main(seed=seed):
     # ---------------------------------------------------------------------------------------------------
     #  Logger
     # ---------------------------------------------------------------------------------------------------
-    save_path = f"./results/MultiAgents_DDPG_{pd.Timestamp.utcnow().value}"
+    save_path = f"./results/Reacher_DDPG_{pd.Timestamp.utcnow().value}"
     os.makedirs(save_path, exist_ok=True)
 
     logger = logging.getLogger()
@@ -87,14 +87,14 @@ def main(seed=seed):
         hidden_layers_actor=(200, 150),  # (50, 50, 15),  # (200, 150),  #
         hidden_layers_critic_body=(400,),  # (50, 50,),  #
         hidden_layers_critic_head=(300,),  # (50,),   # (300,)
-        func_critic_body="F.relu",  #
-        func_critic_head="F.relu",  #
-        func_actor_body="F.relu",  #
-        lr_scheduler=None,  # {'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
-                      # 'gamma': 0.5,  # 0.99999,
-                      # 'step_size': 1,
-                      # 'milestones': [30*1000 * i for i in range(1, 6)],
-                      # 'max_epochs': n_episodes},
+        func_critic_body="F.leaky_relu",  #
+        func_critic_head="F.leaky_relu",  #
+        func_actor_body="F.leaky_relu",  #
+        lr_scheduler=None,   #{'scheduler_type': "multistep",  # "step", "exp" or "decay", "multistep"
+        #               'gamma': 0.5,  # 0.99999,
+        #               'step_size': 1,
+        #               'milestones': [15*1000 * i for i in range(1, 6)],
+        #               'max_epochs': n_episodes},
 
         TAU=1e-3,  # for soft update of target parameters
         BUFFER_SIZE=int(1e6),  # replay buffer size
@@ -181,7 +181,7 @@ def main(seed=seed):
         # DDPG Agent
         agent = DDPGAgent(state_size=state_size, action_size=action_size,
                           model_actor=actor, model_critic=critic,
-                          actor_target=actor_target, critic_target=critic_target,
+                          # actor_target=actor_target, critic_target=critic_target,
                           action_space_low=-1, action_space_high=1,
                           config=config,
                           )

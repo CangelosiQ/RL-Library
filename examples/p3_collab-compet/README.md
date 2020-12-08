@@ -6,6 +6,8 @@
 
 # Project 3: Collaboration and Competition
 
+## 1. Project description and setup (copied from [here](https://github.com/udacity/deep-reinforcement-learning/tree/master/p3_collab-compet))
+
 ### Introduction
 
 For this project, you will work with the [Tennis](https://github.com/Unity-Technologies/ml-agents/blob/master/docs/Learning-Environment-Examples.md#tennis) environment.
@@ -60,3 +62,44 @@ You need only select the environment that matches your operating system:
 Then, place the file in the `p3_collab-compet/` folder in the DRLND GitHub repository, and unzip (or decompress) the file.  Next, open `Soccer.ipynb` and follow the instructions to learn how to use the Python API to control the agent.
 
 (_For AWS_) If you'd like to train the agents on AWS (and have not [enabled a virtual screen](https://github.com/Unity-Technologies/ml-agents/blob/master/docs/Training-on-Amazon-Web-Service.md)), then please use [this link](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P3/Soccer/Soccer_Linux_NoVis.zip) to obtain the "headless" version of the environment.  You will **not** be able to watch the agents without enabling a virtual screen, but you will be able to train the agents.  (_To watch the agents, you should follow the instructions to [enable a virtual screen](https://github.com/Unity-Technologies/ml-agents/blob/master/docs/Training-on-Amazon-Web-Service.md), and then download the environment for the **Linux** operating system above._)
+
+
+## 2. Project Submission
+In the following section, I will provide information going through the list of [criteria](https://review.udacity.com/#!/rubrics/1891/view) for the project.
+
+### Training Code
+The code for this project is located under `examples/p3_collab-compet`.
+To train the agent you can run either `Tennis.ipynb` or `Tennis.py`. My working environment for this project was the python script while the python notebook was used to describe the code and its outputs to the reviewers.
+
+
+**Framework**: The code is written in PyTorch and Python 3.
+
+**Saved Model Weights**: The model weights are saved under `examples/p3_collab-compet/assets/best_agent/` and can be easily loaded when running `Tennis.ipynb` or `Tennis_test.py`.
+
+### README
+This is exactly the file currently being read :-) describing the project environment details, providing instructions for installing dependencies and on how to run the code in the repository, to train the agent.
+
+### Report
+The report for this project is [`examples/p3_collab-compet/Report.md`](./Report.md).
+
+
+## 3. Installation Guide
+
+
+In order to run the examples with UnityAgents, please install the dependencies located under *setup_unityagents* by running the following commands:
+
+    cd setup_unityagents
+    pip install .
+
+Then install the package dependencies by running **after going back to the root of the repository** (e.g. by running `cd ..`)
+
+    pip install -r requirements.txt
+
+Finally, install the rl_library package by running
+
+    pip install .
+or for development mode:
+    
+    pip install -e .
+
+For more details on the repository structure and installation steps please refer to the main README file [here](../../README.md).
